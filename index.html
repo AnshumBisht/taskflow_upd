@@ -278,7 +278,8 @@ input:focus,select:focus{border-color:var(--accent)}
 </head>
 <body>
 
-<div class="login-screen hidden" id="login-screen">
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="login-screen">
   <div class="login-box">
     <div class="login-logo">Task<span>Flow</span></div>
     <div class="login-sub">Sign in to sync across devices</div>
@@ -493,7 +494,6 @@ const firebaseConfig = {
 
 let fbApp, fbDb, fbAuth;
 let currentUser = null;
-
 let tasks = [];
 let modules = [];
 let deadlineEvents = [];
@@ -501,7 +501,6 @@ let activeModule = '__all__';
 let activeFilter = 'all';
 let nextId = 1;
 let manageOpen = true;
-
 let pushTimer = null;
 let pollTimer = null;
 let lastCloudTs = 0;
@@ -518,7 +517,7 @@ const DEFAULT_MODULES = [
   { name: 'Revision', icon: '📚', color: '#999999' }
 ];
 
-// ─── Sync Status UI ───────────────────────────────────────────
+// ─── Sync Status ──────────────────────────────────────────────
 function setSyncStatus(state, text) {
   const el = document.getElementById('sync-status');
   if (!el) return;
@@ -526,7 +525,7 @@ function setSyncStatus(state, text) {
   document.getElementById('sync-text').textContent = text;
 }
 
-// ─── Login screen ─────────────────────────────────────────────
+// ─── Login / Logout ───────────────────────────────────────────
 function showLoginScreen() {
   document.getElementById('login-screen').classList.remove('hidden');
 }
@@ -547,7 +546,7 @@ async function doLogin() {
     msg.textContent = '✓ Signed in!';
     msg.className = 'login-msg ok';
   } catch (e) {
-    console.error(e);
+    console.error('[TaskFlow] Login error:', e);
     msg.textContent = '⚠ ' + (e.message || 'Login failed');
     msg.className = 'login-msg err';
   } finally {
@@ -555,12 +554,12 @@ async function doLogin() {
   }
 }
 async function doLogout() {
-  if (!confirm('Log out? Your data will stay synced on the cloud.')) return;
+  if (!confirm('Log out? Your data stays safe on the cloud.')) return;
   await fbAuth.signOut();
   location.reload();
 }
 
-// ─── Boot: Firebase init + auth state ─────────────────────────
+// ─── Boot ─────────────────────────────────────────────────────
 async function boot() {
   setSyncStatus('syncing', 'Connecting…');
   try {
@@ -582,9 +581,8 @@ async function boot() {
           if (!syncing && isOnline && currentUser) pullFromCloud().catch(() => {});
         }, 15000);
 
-        // periodic retry for pending local changes
-        if (!window.__taskflowRetryTimer) {
-          window.__taskflowRetryTimer = setInterval(() => {
+        if (!window.__retryTimer) {
+          window.__retryTimer = setInterval(() => {
             if (localDirty && !syncing && isOnline && currentUser) {
               pushToCloud().catch(() => {});
             }
@@ -593,12 +591,13 @@ async function boot() {
       } else {
         currentUser = null;
         showLoginScreen();
+        setSyncStatus('offline', 'Not signed in');
       }
     });
   } catch (e) {
     console.error('[TaskFlow] Boot failed:', e);
     setSyncStatus('offline', 'Auth failed');
-    renderAll();
+    showLoginScreen();
   }
 }
 
@@ -614,15 +613,15 @@ async function writeCloud(payload) {
   await DOC_REF().set(payload);
 }
 
-// ─── Merge strategy ───────────────────────────────────────────
+// ─── Merge ────────────────────────────────────────────────────
 function mergeData(local, cloud) {
   if (!cloud) return local;
   if (!local) return cloud;
   return {
-    tasks:           mergeArrays(local.tasks || [],          cloud.tasks || [],          'id'),
-    modules:         mergeModules(local.modules || [],        cloud.modules || []),
-    deadlineEvents:  mergeArrays(local.deadlineEvents || [], cloud.deadlineEvents || [], 'uid'),
-    _ts:             Math.max(local._ts || 0, cloud._ts || 0)
+    tasks:          mergeArrays(local.tasks || [],          cloud.tasks || [],          'id'),
+    modules:        mergeModules(local.modules || [],        cloud.modules || []),
+    deadlineEvents: mergeArrays(local.deadlineEvents || [], cloud.deadlineEvents || [], 'uid'),
+    _ts:            Math.max(local._ts || 0, cloud._ts || 0)
   };
 }
 function mergeArrays(a, b, idKey) {
@@ -645,20 +644,14 @@ function mergeModules(a, b) {
   return Array.from(map.values());
 }
 
-// ─── Core sync ────────────────────────────────────────────────
+// ─── Sync core ────────────────────────────────────────────────
 async function pushToCloud() {
   if (!currentUser || !isOnline) return;
-  const payload = {
-    tasks:          tasks,
-    modules:        modules,
-    deadlineEvents: deadlineEvents,
-    _ts:            Date.now()
-  };
+  const payload = { tasks, modules, deadlineEvents, _ts: Date.now() };
   await writeCloud(payload);
   lastCloudTs = payload._ts;
   localDirty = false;
 }
-
 async function pullFromCloud() {
   if (!currentUser || !isOnline) return false;
   const cloud = await readCloud();
@@ -679,7 +672,6 @@ async function pullFromCloud() {
   }
   return false;
 }
-
 async function fullSync() {
   if (!currentUser || !isOnline || syncing) return;
   syncing = true;
@@ -695,29 +687,19 @@ async function fullSync() {
     syncing = false;
   }
 }
-
 function schedulePush() {
   if (!currentUser || !isOnline) return;
   localDirty = true;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => fullSync(), 1200);
 }
-
 function forceSyncNow() {
   if (!isOnline) { setSyncStatus('offline', 'Offline'); return; }
   if (!currentUser) { setSyncStatus('offline', 'Not signed in'); return; }
   fullSync();
 }
-
-window.addEventListener('online', () => {
-  isOnline = true;
-  setSyncStatus('online', 'Back online');
-  if (currentUser) fullSync();
-});
-window.addEventListener('offline', () => {
-  isOnline = false;
-  setSyncStatus('offline', 'Offline — local only');
-});
+window.addEventListener('online', () => { isOnline = true; setSyncStatus('online', 'Back online'); if (currentUser) fullSync(); });
+window.addEventListener('offline', () => { isOnline = false; setSyncStatus('offline', 'Offline — local only'); });
 
 // ─── Helpers ──────────────────────────────────────────────────
 function ts() { return new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
@@ -845,7 +827,7 @@ function clearDeadline(id) {
 }
 function recordDeadlineEvent(task, type, eventDate) {
   if (deadlineEvents.some(e => e.taskId === task.id)) return;
-  const ev = { uid: Date.now() + '-' + Math.random().toString(36).slice(2), taskId: task.id, taskName: task.task, module: task.module, type: type, date: eventDate.toISOString() };
+  const ev = { uid: Date.now() + '-' + Math.random().toString(36).slice(2), taskId: task.id, taskName: task.task, module: task.module, type, date: eventDate.toISOString() };
   deadlineEvents.push(ev);
 }
 function checkOverdueEvents() {
@@ -1033,25 +1015,16 @@ function weekKey(d) {
   mon.setDate(d.getDate() + diff);
   return dayKey(mon);
 }
-function nDaysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+function nDaysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(0, 0, 0, 0); return d; }
 function parseCompletedDate(str) {
   if (!str || str === 'undefined' || str.trim() === '') return null;
   const d = new Date(str);
-  if (!isNaN(d)) return d;
-  return null;
+  return isNaN(d) ? null : d;
 }
 function buildDeadlinePerf5Day() {
   const events = activeModule === '__all__' ? deadlineEvents : deadlineEvents.filter(e => e.module === activeModule);
   const deltaMap = {};
-  events.forEach(e => {
-    const k = dayKey(new Date(e.date));
-    deltaMap[k] = (deltaMap[k] || 0) + (e.type === 'hit' ? 1 : -1);
-  });
+  events.forEach(e => { const k = dayKey(new Date(e.date)); deltaMap[k] = (deltaMap[k] || 0) + (e.type === 'hit' ? 1 : -1); });
   const labels = [], scores = [], blockBoundaries = [];
   let blockScore = 0;
   for (let i = 29; i >= 0; i--) {
@@ -1062,16 +1035,13 @@ function buildDeadlinePerf5Day() {
     blockScore += (deltaMap[dayKey(d)] || 0);
     scores.push(blockScore);
   }
-  return { labels: labels, scores: scores, blockBoundaries: blockBoundaries };
+  return { labels, scores, blockBoundaries };
 }
 function buildDeadlinePerfMonthly() {
   const monthKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
   const events = activeModule === '__all__' ? deadlineEvents : deadlineEvents.filter(e => e.module === activeModule);
   const monthMap = {};
-  events.forEach(e => {
-    const k = monthKey(new Date(e.date));
-    monthMap[k] = (monthMap[k] || 0) + (e.type === 'hit' ? 1 : -1);
-  });
+  events.forEach(e => { const k = monthKey(new Date(e.date)); monthMap[k] = (monthMap[k] || 0) + (e.type === 'hit' ? 1 : -1); });
   const labels = [], scores = [];
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
@@ -1079,38 +1049,26 @@ function buildDeadlinePerfMonthly() {
     labels.push(d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }));
     scores.push(monthMap[monthKey(d)] || 0);
   }
-  return { labels: labels, scores: scores };
+  return { labels, scores };
 }
 function buildChartData() {
   const relevant = activeModule === '__all__' ? tasks : tasks.filter(t => t.module === activeModule);
   const doneTasks = relevant.filter(t => t.status === 'Done' && t.completed && t.completed.trim() !== '');
   if (chartMode === 'daily') {
     const N = 14, countMap = {};
-    doneTasks.forEach(t => {
-      const d = parseCompletedDate(t.completed);
-      if (!d) return;
-      const k = dayKey(d);
-      countMap[k] = (countMap[k] || 0) + 1;
-    });
+    doneTasks.forEach(t => { const d = parseCompletedDate(t.completed); if (!d) return; const k = dayKey(d); countMap[k] = (countMap[k] || 0) + 1; });
     const labels = [], counts = [], cumul = [];
     let running = 0;
     for (let i = N - 1; i >= 0; i--) {
       const d = nDaysAgo(i);
       labels.push(d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
       const c = countMap[dayKey(d)] || 0;
-      counts.push(c);
-      running += c;
-      cumul.push(running);
+      counts.push(c); running += c; cumul.push(running);
     }
-    return { labels: labels, counts: counts, cumul: cumul };
+    return { labels, counts, cumul };
   } else {
     const N = 8, countMap = {};
-    doneTasks.forEach(t => {
-      const d = parseCompletedDate(t.completed);
-      if (!d) return;
-      const k = weekKey(d);
-      countMap[k] = (countMap[k] || 0) + 1;
-    });
+    doneTasks.forEach(t => { const d = parseCompletedDate(t.completed); if (!d) return; const k = weekKey(d); countMap[k] = (countMap[k] || 0) + 1; });
     const labels = [], counts = [], cumul = [], seen = {};
     let running = 0;
     for (let i = N - 1; i >= 0; i--) {
@@ -1120,21 +1078,15 @@ function buildChartData() {
       const d = new Date(k + 'T00:00:00');
       labels.push('Wk ' + d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
       const c = countMap[k] || 0;
-      counts.push(c);
-      running += c;
-      cumul.push(running);
+      counts.push(c); running += c; cumul.push(running);
     }
-    return { labels: labels, counts: counts, cumul: cumul };
+    return { labels, counts, cumul };
   }
 }
-function makeGradient(ctx, a, b) {
-  const g = ctx.createLinearGradient(0, 0, 0, 160);
-  g.addColorStop(0, a); g.addColorStop(1, b);
-  return g;
-}
+function makeGradient(ctx, a, b) { const g = ctx.createLinearGradient(0, 0, 0, 160); g.addColorStop(0, a); g.addColorStop(1, b); return g; }
 function renderCharts(fast) {
   const cd = buildChartData();
-  const labels = cd.labels, counts = cd.counts, cumul = cd.cumul;
+  const { labels, counts, cumul } = cd;
   const isDaily = chartMode === 'daily';
   document.getElementById('chart1-title').textContent = isDaily ? 'Tasks Completed / Day' : 'Tasks Completed / Week';
   document.getElementById('chart1-sub').textContent = isDaily ? 'Last 14 days' : 'Last 8 weeks';
@@ -1174,25 +1126,22 @@ function renderCharts(fast) {
     sMEl.textContent = (curM > 0 ? '+' : '') + curM;
     sMEl.className = 'perf-score ' + (curM > 0 ? 'positive' : curM < 0 ? 'negative' : 'zero');
     const mode = fast ? 'none' : undefined;
-    chartCompleted.update(mode);
-    chartCumulative.update(mode);
-    chartDlPerf5Day.update(mode);
-    chartDlPerfMonthly.update(mode);
+    chartCompleted.update(mode); chartCumulative.update(mode); chartDlPerf5Day.update(mode); chartDlPerfMonthly.update(mode);
     return;
   }
 
   const ctx1 = document.getElementById('chart-completed').getContext('2d');
-  chartCompleted = new Chart(ctx1, { type: 'line', data: { labels: labels, datasets: [{ data: counts, borderColor: '#e0e0e0', borderWidth: 2.5, pointBackgroundColor: '#e0e0e0', pointRadius: counts.map(c => c > 0 ? 4 : 2), pointHoverRadius: 6, fill: true, backgroundColor: makeGradient(ctx1, 'rgba(224,224,224,0.2)', 'rgba(224,224,224,0.01)'), tension: 0.4 }] }, options: baseOpts });
+  chartCompleted = new Chart(ctx1, { type: 'line', data: { labels, datasets: [{ data: counts, borderColor: '#e0e0e0', borderWidth: 2.5, pointBackgroundColor: '#e0e0e0', pointRadius: counts.map(c => c > 0 ? 4 : 2), pointHoverRadius: 6, fill: true, backgroundColor: makeGradient(ctx1, 'rgba(224,224,224,0.2)', 'rgba(224,224,224,0.01)'), tension: 0.4 }] }, options: baseOpts });
 
   const ctx2 = document.getElementById('chart-cumulative').getContext('2d');
-  chartCumulative = new Chart(ctx2, { type: 'line', data: { labels: labels, datasets: [{ data: cumul, borderColor: '#888888', borderWidth: 2.5, pointBackgroundColor: '#888888', pointRadius: 3, pointHoverRadius: 6, fill: true, backgroundColor: makeGradient(ctx2, 'rgba(136,136,136,0.2)', 'rgba(136,136,136,0.01)'), tension: 0.4 }] }, options: baseOpts });
+  chartCumulative = new Chart(ctx2, { type: 'line', data: { labels, datasets: [{ data: cumul, borderColor: '#888888', borderWidth: 2.5, pointBackgroundColor: '#888888', pointRadius: 3, pointHoverRadius: 6, fill: true, backgroundColor: makeGradient(ctx2, 'rgba(136,136,136,0.2)', 'rgba(136,136,136,0.01)'), tension: 0.4 }] }, options: baseOpts });
 
   const perfOpts = {
     responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
-    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d0d0d', borderColor: '#363636', borderWidth: 1, titleColor: '#f2f2f2', bodyColor: '#b5b5b5', titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 12 }, padding: 10, displayColors: false, callbacks: { label: function(ctx) { const v = ctx.parsed.y; return (v > 0 ? '+' : '') + v + ' score'; } } } },
-    scales: { x: { grid: { color: 'rgba(36,36,36,0.9)', drawTicks: false }, ticks: { color: '#505050', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 15 }, border: { color: '#242424' } }, y: { grid: { color: function(ctx) { return ctx.tick.value === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(36,36,36,0.9)'; }, lineWidth: function(ctx) { return ctx.tick.value === 0 ? 2 : 1; }, drawTicks: false }, ticks: { color: function(ctx) { return ctx.tick.value > 0 ? '#5aab7a' : ctx.tick.value < 0 ? '#e05252' : '#888888'; }, font: { family: 'JetBrains Mono', size: 10 }, stepSize: 1, precision: 0 }, border: { color: '#242424' } } }
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d0d0d', borderColor: '#363636', borderWidth: 1, titleColor: '#f2f2f2', bodyColor: '#b5b5b5', titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 12 }, padding: 10, displayColors: false, callbacks: { label: ctx => { const v = ctx.parsed.y; return (v > 0 ? '+' : '') + v + ' score'; } } } },
+    scales: { x: { grid: { color: 'rgba(36,36,36,0.9)', drawTicks: false }, ticks: { color: '#505050', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 15 }, border: { color: '#242424' } }, y: { grid: { color: ctx => ctx.tick.value === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(36,36,36,0.9)', lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1, drawTicks: false }, ticks: { color: ctx => ctx.tick.value > 0 ? '#5aab7a' : ctx.tick.value < 0 ? '#e05252' : '#888888', font: { family: 'JetBrains Mono', size: 10 }, stepSize: 1, precision: 0 }, border: { color: '#242424' } } }
   };
-  const perfDataset = function(scores) { return { data: scores, segment: { borderColor: function(ctx) { const y0 = ctx.p0.parsed.y, y1 = ctx.p1.parsed.y; return (y0 >= 0 && y1 >= 0) ? '#5aab7a' : (y0 < 0 && y1 < 0) ? '#e05252' : '#888888'; } }, borderWidth: 2.5, pointBackgroundColor: scores.map(function(v) { return v > 0 ? '#5aab7a' : v < 0 ? '#e05252' : '#888888'; }), pointBorderColor: 'transparent', pointRadius: 4, pointHoverRadius: 7, fill: false, tension: 0.3 }; };
+  const perfDataset = scores => ({ data: scores, segment: { borderColor: ctx => { const y0 = ctx.p0.parsed.y, y1 = ctx.p1.parsed.y; return (y0 >= 0 && y1 >= 0) ? '#5aab7a' : (y0 < 0 && y1 < 0) ? '#e05252' : '#888888'; } }, borderWidth: 2.5, pointBackgroundColor: scores.map(v => v > 0 ? '#5aab7a' : v < 0 ? '#e05252' : '#888888'), pointBorderColor: 'transparent', pointRadius: 4, pointHoverRadius: 7, fill: false, tension: 0.3 });
 
   const d5 = buildDeadlinePerf5Day();
   const ctx3 = document.getElementById('chart-dl-perf-5day').getContext('2d');
@@ -1222,7 +1171,7 @@ function setChartMode(mode) {
   renderCharts();
 }
 
-// ─── Excel import / export ────────────────────────────────────
+// ─── Excel ────────────────────────────────────────────────────
 function importExcel(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1268,26 +1217,23 @@ function importExcel(event) {
       const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
       if (wb.SheetNames.indexOf('Modules') !== -1) {
         const mSheet = XLSX.utils.sheet_to_json(wb.Sheets['Modules']);
-        const importedMods = mSheet.map(function(r) {
-          return { name: String(r['Module Name'] || r['name'] || '').trim(), icon: String(r['Icon'] || r['icon'] || '📌').trim(), color: String(r['Color'] || r['color'] || '#e0e0e0').trim() };
-        }).filter(function(m) { return m.name; });
+        const importedMods = mSheet.map(r => ({ name: String(r['Module Name'] || r['name'] || '').trim(), icon: String(r['Icon'] || r['icon'] || '📌').trim(), color: String(r['Color'] || r['color'] || '#e0e0e0').trim() })).filter(m => m.name);
         if (importedMods.length) modules = importedMods;
       }
       const sheetName = wb.SheetNames.indexOf('Tasks') !== -1 ? 'Tasks' : wb.SheetNames[0];
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
       if (!rows.length) { toast('⚠ No task rows found', true); return; }
       let imported = 0, skipped = 0;
-      const sortedRows = rows.slice().sort(function(a, b) {
+      const sortedRows = rows.slice().sort((a, b) => {
         const ida = parseInt(a['ID'] || a['id'] || 0);
         const idb = parseInt(b['ID'] || b['id'] || 0);
         return idb - ida;
       });
-      for (let i = 0; i < sortedRows.length; i++) {
-        const r = sortedRows[i];
+      sortedRows.forEach(r => {
         const taskText = String(r['Task'] || r['task'] || '').trim();
-        if (!taskText) { skipped++; continue; }
+        if (!taskText) { skipped++; return; }
         const moduleName = String(r['Module'] || r['module'] || 'General').trim();
-        if (moduleName && !modules.find(function(m) { return m.name === moduleName; })) {
+        if (moduleName && !modules.find(m => m.name === moduleName)) {
           modules.push({ name: moduleName, icon: '📌', color: COLORS[modules.length % COLORS.length] });
         }
         let completedVal = '';
@@ -1296,42 +1242,27 @@ function importExcel(event) {
           if (rawComp instanceof Date) completedVal = isNaN(rawComp) ? '' : rawComp.toISOString();
           else {
             const s = String(rawComp).trim();
-            if (/^\d{4}-\d{2}-\d{2}T/.test(s)) completedVal = s;
-            else completedVal = parseAnyDate(s) || s;
+            completedVal = /^\d{4}-\d{2}-\d{2}T/.test(s) ? s : (parseAnyDate(s) || s);
           }
         }
-        const t = {
-          id: nextId++,
-          module: moduleName,
-          task: taskText,
-          priority: String(r['Priority'] || r['priority'] || 'Medium').trim(),
-          status: String(r['Status'] || r['status'] || 'Pending').trim(),
-          deadline: parseAnyDate(r['Deadline'] || r['deadline']),
-          created: parseDisplayDate(r['Created'] || r['created']) || ts(),
-          completed: completedVal
-        };
-        tasks.unshift(t);
+        tasks.unshift({ id: nextId++, module: moduleName, task: taskText, priority: String(r['Priority'] || r['priority'] || 'Medium').trim(), status: String(r['Status'] || r['status'] || 'Pending').trim(), deadline: parseAnyDate(r['Deadline'] || r['deadline']), created: parseDisplayDate(r['Created'] || r['created']) || ts(), completed: completedVal });
         imported++;
-      }
-      renderAll();
-      schedulePush();
+      });
+      renderAll(); schedulePush();
       toast('✓ Imported ' + imported + ' task' + (imported !== 1 ? 's' : '') + (skipped ? ' (' + skipped + ' skipped)' : ''));
-    } catch(err) {
-      console.error(err);
-      toast('⚠ Failed to read Excel file', true);
-    }
+    } catch(err) { console.error(err); toast('⚠ Failed to read Excel file', true); }
   };
   reader.readAsArrayBuffer(file);
   event.target.value = '';
 }
 function exportExcel() {
   const wb = XLSX.utils.book_new();
-  const fmtDeadline = function(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }); };
-  const taskRows = tasks.map(function(t) { return { ID: t.id, Module: t.module, Task: t.task, Priority: t.priority, Status: t.status, Deadline: fmtDeadline(t.deadline), Created: t.created, Completed: t.completed }; });
+  const fmtDeadline = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }); };
+  const taskRows = tasks.map(t => ({ ID: t.id, Module: t.module, Task: t.task, Priority: t.priority, Status: t.status, Deadline: fmtDeadline(t.deadline), Created: t.created, Completed: t.completed }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taskRows), 'Tasks');
-  const modRows = modules.map(function(m) { return { 'Module Name': m.name, Color: m.color, Icon: m.icon, 'Total Tasks': tasks.filter(function(t) { return t.module === m.name; }).length, Completed: tasks.filter(function(t) { return t.module === m.name && t.status === 'Done'; }).length, '% Done': getModulePct(m.name) }; });
+  const modRows = modules.map(m => ({ 'Module Name': m.name, Color: m.color, Icon: m.icon, 'Total Tasks': tasks.filter(t => t.module === m.name).length, Completed: tasks.filter(t => t.module === m.name && t.status === 'Done').length, '% Done': getModulePct(m.name) }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modRows), 'Modules');
-  const total = tasks.length, done = tasks.filter(function(t) { return t.status === 'Done'; }).length;
+  const total = tasks.length, done = tasks.filter(t => t.status === 'Done').length;
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ Metric: 'Total Tasks', Value: total }, { Metric: 'Completed', Value: done }, { Metric: 'Remaining', Value: total - done }, { Metric: '% Complete', Value: total ? Math.round(done/total*100) + '%' : '0%' }]), 'Summary');
   XLSX.writeFile(wb, 'taskflow.xlsx');
   toast('📊 Exported as taskflow.xlsx!');
@@ -1345,7 +1276,7 @@ function playCompleteSound() {
     const masterGain = ctx.createGain();
     masterGain.gain.setValueAtTime(0.18, ctx.currentTime);
     masterGain.connect(ctx.destination);
-    notes.forEach(function(freq, i) {
+    notes.forEach((freq, i) => {
       const startTime = ctx.currentTime + i * 0.18;
       const osc = ctx.createOscillator();
       osc.type = 'sine';
@@ -1357,7 +1288,7 @@ function playCompleteSound() {
       osc.connect(env); env.connect(masterGain);
       osc.start(startTime); osc.stop(startTime + 1.3);
     });
-    setTimeout(function() { ctx.close(); }, 2200);
+    setTimeout(() => ctx.close(), 2200);
   } catch (e) {}
 }
 
@@ -1375,10 +1306,10 @@ function focusBumpSessionCount() {
 function initFocusTimer() {
   const countEl = document.getElementById('focus-session-count');
   if (countEl) countEl.textContent = focusLoadSessionCount();
-  document.querySelectorAll('.focus-preset').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+  document.querySelectorAll('.focus-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
       if (focusRunning) return;
-      document.querySelectorAll('.focus-preset').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.focus-preset').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       focusWorkMins = parseInt(btn.dataset.work, 10);
       focusBreakMins = parseInt(btn.dataset.break, 10);
@@ -1411,7 +1342,7 @@ function focusTimerStart() {
   focusRunning = true;
   const btn = document.getElementById('focus-start-btn');
   if (btn) { btn.textContent = 'Pause'; btn.classList.add('is-running'); }
-  focusInterval = setInterval(function() {
+  focusInterval = setInterval(() => {
     focusSecondsLeft--;
     if (focusSecondsLeft <= 0) { focusTimerAdvancePhase(); return; }
     focusRenderTimer();
@@ -1460,12 +1391,12 @@ function focusTimerAdvancePhase() {
 }
 
 // ─── Boot on load ─────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('login-email').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
-  document.getElementById('login-password').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
-  document.getElementById('task-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') addTask(); });
-  document.getElementById('mod-name-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') addModule(); });
-  document.getElementById('modal').addEventListener('click', function(e) { if (e.target === e.currentTarget) closeModal(); });
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+  document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  document.getElementById('mod-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') addModule(); });
+  document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
   initFocusTimer();
   boot();
 });
