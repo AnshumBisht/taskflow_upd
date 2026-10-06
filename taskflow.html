@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow — Module Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--s1:#0d0d0d;--s2:#141414;--s3:#1a1a1a;--border:#242424;--border2:#363636;--accent:#303030;--accent-l:#e0e0e0;--red:#e05252;--green:#b5b5b5;--blue:#909090;--gold:#c0c0c0;--gold-l:#e8e8e8;--text:#f2f2f2;--muted:#505050;--muted2:#808080;--radius:14px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh;overflow-x:hidden}
+.app{position:relative;z-index:1;display:flex;min-height:100vh}
+.sidebar{width:280px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:28px 0 20px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo{padding:0 24px 28px;border-bottom:1px solid var(--border);margin-bottom:20px}
+.logo-text{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px}
+.logo-text span{color:var(--accent-l)}
+.logo-sub{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:3px}
+.sidebar-section{padding:0 16px;margin-bottom:8px}
+.sidebar-label{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'JetBrains Mono',monospace;padding:0 8px;margin-bottom:8px}
+.mod-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:all .2s;margin-bottom:2px;border:1px solid transparent}
+.mod-item:hover{background:var(--s2);border-color:var(--border)}
+.mod-item.active{background:var(--s2);border-color:var(--border2)}
+.mod-item.active .mod-name{color:var(--text);font-weight:600}
+.mod-icon{font-size:16px;width:28px;text-align:center;flex-shrink:0}
+.mod-info{flex:1;min-width:0}
+.mod-name{font-size:13px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mod-mini-pct{font-size:10px;font-family:'JetBrains Mono',monospace;margin-top:1px}
+.ring-mini{width:32px;height:32px;flex-shrink:0}
+.ring-mini circle{fill:none;stroke-width:3}
+.ring-bg{stroke:var(--border)}
+.ring-fill{stroke-linecap:round;transition:stroke-dashoffset .6s ease}
+.all-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;border:1px solid transparent;transition:all .2s;background:transparent;color:var(--muted2);font-size:13px;font-family:'Outfit',sans-serif;width:100%;margin-bottom:2px}
+.all-btn:hover{background:var(--s2);border-color:var(--border);color:var(--text)}
+.all-btn.active{background:var(--s2);border-color:var(--border2);color:var(--text);font-weight:600}
+.sidebar-bottom{margin-top:auto;padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.btn-excel{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;border:1px solid;transition:all .2s;width:100%}
+.btn-import{background:rgba(144,144,144,.12);border-color:rgba(144,144,144,.3);color:var(--blue)}
+.btn-import:hover{background:rgba(144,144,144,.22)}
+.btn-export{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:var(--green)}
+.btn-export:hover{background:rgba(255,255,255,.08)}
+#file-input{display:none}
+.main{flex:1;padding:32px 36px 80px;min-width:0}
+.main-header{margin-bottom:32px}
+.main-title{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1.1}
+.main-title .hl{color:var(--accent-l)}
+.main-sub{color:var(--muted);font-size:13px;margin-top:6px}
+.global-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:30px}
+.gstat{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}
+.gstat:hover{border-color:var(--border2);transform:translateY(-2px)}
+.gstat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}
+.gstat:nth-child(1)::after{background:var(--accent-l)}
+.gstat:nth-child(2)::after{background:var(--red)}
+.gstat:nth-child(3)::after{background:var(--green)}
+.gstat:nth-child(4)::after{background:var(--gold-l)}
+.gstat-num{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:600;line-height:1;margin-bottom:4px}
+.gstat:nth-child(1) .gstat-num{color:var(--accent-l)}
+.gstat:nth-child(2) .gstat-num{color:var(--red)}
+.gstat:nth-child(3) .gstat-num{color:var(--green)}
+.gstat:nth-child(4) .gstat-num{color:var(--gold-l)}
+.gstat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.module-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:30px}
+.module-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+.module-card:hover,.module-card.active{border-color:var(--border2);background:var(--s2);transform:translateY(-2px)}
+.module-card.active{box-shadow:0 0 0 2px var(--accent)}
+.mc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.mc-icon{font-size:22px}
+.mc-ring{width:44px;height:44px}
+.mc-ring circle{fill:none;stroke-width:4}
+.mc-name{font-size:13px;font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-stat{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.section-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.section-badge{background:var(--s2);border:1px solid var(--border);border-radius:100px;padding:3px 12px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted2)}
+.filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fbtn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:100px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s}
+.fbtn:hover,.fbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-clear-done{background:rgba(224,82,82,.1);border:1px solid rgba(224,82,82,.28);color:var(--red);border-radius:100px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;margin-left:auto}
+.btn-clear-done:hover{background:rgba(224,82,82,.2)}
+.add-box{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px}
+.add-box-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:12px}
+.add-row{display:flex;gap:8px;flex-wrap:wrap}
+input[type="text"],select{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:9px 14px;font-family:'Outfit',sans-serif;font-size:13px;outline:none;transition:border-color .2s}
+input[type="text"]{flex:1;min-width:180px}
+select{cursor:pointer;min-width:110px}
+input::placeholder{color:var(--muted)}
+input:focus,select:focus{border-color:var(--accent)}
+.btn-add{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 22px;font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-add:hover{background:#2a2a2a;transform:translateY(-1px)}
+.add-mod-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.task-list{display:flex;flex-direction:column;gap:7px}
+.task-item{background:var(--s1);border:1px solid var(--border);border-radius:11px;padding:12px 16px;display:flex;align-items:center;gap:13px;transition:all .2s;animation:fadeUp .25s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.task-item:hover{border-color:var(--border2);background:var(--s2)}
+.task-item.done{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1);opacity:.75}
+.check-btn{width:22px;height:22px;border-radius:50%;border:2px solid var(--border2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .2s;background:transparent}
+.check-btn:hover{border-color:var(--green);background:rgba(255,255,255,.08)}
+.task-item.done .check-btn{background:var(--green);border-color:var(--green);color:#000}
+.task-body{flex:1;min-width:0}
+.task-txt{font-size:13.5px;line-height:1.4}
+.task-item.done .task-txt{text-decoration:line-through;color:var(--muted)}
+.task-tags{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center}
+.tag{font-size:10px;padding:2px 9px;border-radius:100px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.3px}
+.tag-mod{background:rgba(255,255,255,.08);color:#b5b5b5}
+.tag-high{background:rgba(188,74,74,.22);color:#e08080}
+.tag-medium{background:rgba(201,150,12,.2);color:#e8e8e8}
+.tag-low{background:rgba(144,144,144,.22);color:#7ab8c4}
+.tag-done{background:rgba(255,255,255,.08);color:var(--green)}
+.task-date{font-size:10px;color:var(--muted)}
+.del-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:7px;font-size:13px;transition:all .2s;flex-shrink:0}
+.del-btn:hover{background:rgba(224,82,82,.15);color:var(--red)}
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty-icon{font-size:38px;margin-bottom:10px}
+.empty-text{font-family:'JetBrains Mono',monospace;font-size:12px}
+.toast{position:fixed;bottom:28px;right:28px;background:var(--s2);border:1px solid var(--green);color:var(--green);padding:11px 18px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:12px;z-index:9999;opacity:0;transform:translateY(8px);transition:all .3s;pointer-events:none;max-width:300px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.err{border-color:var(--red);color:var(--red)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--s1);border:1px solid var(--border2);border-radius:18px;padding:32px;width:440px;max-width:95vw;transform:translateY(12px);transition:transform .25s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal h2{font-family:'Syne',sans-serif;font-size:20px;margin-bottom:6px}
+.modal p{color:var(--muted);font-size:13px;margin-bottom:20px}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end}
+.btn-cancel{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:9px;padding:9px 20px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:13px;transition:all .2s}
+.btn-cancel:hover{border-color:var(--border2);color:var(--text)}
+.btn-confirm{background:var(--red);border:none;color:#fff;border-radius:9px;padding:9px 20px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:13px;transition:all .2s}
+.btn-confirm:hover{background:#933}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;margin-right:5px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.manage-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px}
+.manage-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.toggle-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;transition:color .2s}
+.toggle-btn:hover{color:var(--text)}
+.mod-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.mod-chip{display:flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--border);border-radius:100px;padding:5px 12px;font-size:12px;transition:all .2s}
+.mod-chip-del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;margin-left:2px;transition:color .2s;line-height:1}
+.mod-chip-del:hover{color:var(--red)}
+.charts-section{margin-bottom:28px}
+.charts-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.charts-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700}
+.chart-tabs{display:flex;gap:6px;background:var(--s1);border:1px solid var(--border);border-radius:100px;padding:4px}
+.chart-tab{background:transparent;border:none;color:var(--muted);border-radius:100px;padding:5px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .2s}
+.chart-tab.active{background:var(--accent);color:#fff}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.chart-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:20px 20px 16px;position:relative;transition:border-color .2s}
+.chart-card:hover{border-color:var(--border2)}
+.chart-card-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:4px}
+.chart-card-sub{font-size:12px;color:var(--muted2);margin-bottom:16px}
+.chart-peak{position:absolute;top:20px;right:20px;font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600}
+.chart-wrap{position:relative;height:160px}
+.no-data-chart{height:160px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px;flex-direction:column;gap:8px}
+.no-data-chart span{font-size:28px}
+@media (max-width:800px){.sidebar{display:none}.main{padding:20px 16px 60px}.global-stats{grid-template-columns:repeat(2,1fr)}.charts-grid{grid-template-columns:1fr}}
+.dl-input-form{background:var(--s2);border:1px solid var(--border2);border-radius:9px;color:var(--muted2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:9px 10px;cursor:pointer;transition:border-color .2s,color .2s;min-width:0;outline:none;color-scheme:dark}
+.dl-input-form:hover,.dl-input-form:focus{border-color:var(--accent-l);color:var(--text)}
+.deadline-row{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap}
+.dl-input-inline{background:var(--s2);border:1px solid var(--border);border-radius:7px;color:var(--muted2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 10px;cursor:pointer;transition:border-color .2s,color .2s;outline:none;color-scheme:dark;min-width:0}
+.dl-input-inline:hover{border-color:var(--border2);color:var(--text)}
+.dl-input-inline:focus{border-color:var(--accent-l);color:var(--text)}
+.dl-label-icon{font-size:13px;color:var(--muted);flex-shrink:0;line-height:1}
+.dl-clear{background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:10px;padding:3px 8px;border-radius:6px;transition:all .2s;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.dl-clear:hover{color:var(--red);border-color:var(--red);background:rgba(224,82,82,.1)}
+.timer-display{display:inline-flex;align-items:center}
+.timer-wrap{display:inline-flex;align-items:flex-start;gap:4px;background:var(--s2);border:1px solid var(--border2);border-radius:8px;padding:5px 12px}
+.timer-block{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:22px}
+.timer-num{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--text);line-height:1;letter-spacing:.5px}
+.timer-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.timer-sep{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--muted);margin-top:1px;line-height:1}
+.overdue-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(224,82,82,.15);border:1px solid rgba(224,82,82,.4);color:var(--red);border-radius:7px;padding:4px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:1px;animation:blink-red 1.8s ease-in-out infinite}
+@keyframes blink-red{0%,100%{opacity:1}50%{opacity:.5}}
+.overdue-text{color:var(--red)!important;font-weight:500}
+.task-item.overdue{border-color:rgba(224,82,82,.3)!important;background:rgba(224,82,82,.03)!important}
+.deadline-board{margin-bottom:24px}
+.deadline-board-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.deadline-board-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--text)}
+.deadline-board-count{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);background:var(--s2);border:1px solid var(--border);border-radius:100px;padding:2px 10px}
+.deadline-scroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.deadline-scroll::-webkit-scrollbar{height:4px}
+.deadline-scroll::-webkit-scrollbar-track{background:transparent}
+.deadline-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+.deadline-scroll:empty::after{content:'No deadlines set — add one from any task below ⏰';font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);padding:20px 0;white-space:nowrap}
+.dl-card{flex-shrink:0;width:210px;background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}
+.dl-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.dl-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--border2);transition:background .3s}
+.dl-card.overdue-card{border-color:rgba(224,82,82,.35)}
+.dl-card.overdue-card::before{background:var(--red)}
+.dl-card.urgent-card{border-color:rgba(224,82,82,.2)}
+.dl-card.urgent-card::before{background:linear-gradient(90deg,var(--red),#ff8c42)}
+.dl-card.soon-card::before{background:linear-gradient(90deg,#c0c0c0,var(--accent-l))}
+.dl-card-module{font-size:9px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:5px}
+.dl-card-name{font-size:12px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dl-card.overdue-card .dl-card-name{color:var(--red)}
+.dl-card-deadline-dt{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted2);margin-bottom:10px;letter-spacing:.2px;line-height:1.5}
+.dl-card-deadline-dt.overdue-dt{color:rgba(224,82,82,.75)}
+.dl-card-timer{display:flex;align-items:flex-start;gap:3px}
+.dl-card-timer .timer-wrap{padding:4px 8px;background:var(--s2);border-color:var(--border);width:100%;justify-content:center}
+.dl-card-timer .timer-num{font-size:16px}
+.dl-card-timer .timer-sep{font-size:16px;margin-top:0}
+.dl-card-timer .timer-lbl{font-size:9px}
+.dl-card-timer .overdue-badge{width:100%;justify-content:center;font-size:12px;padding:6px 10px}
+.sticky-section{margin-bottom:24px}
+.sticky-wall{display:flex;justify-content:flex-start;padding:6px 4px 10px}
+.sticky-note{width:100%;max-width:340px;min-height:130px;padding:26px 18px 18px;background:#f4e27a;color:#2b2616;font-family:'Outfit',sans-serif;font-size:15px;font-weight:500;line-height:1.35;border-radius:2px 2px 16px 2px;box-shadow:0 6px 14px rgba(0,0,0,.55),inset 0 -18px 24px -18px rgba(0,0,0,.18);position:relative;transform:rotate(-1deg);text-align:left}
+.sticky-note::before{content:'';position:absolute;top:8px;left:50%;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:rgba(0,0,0,.22)}
+.sticky-item{display:block;padding:7px 0;border-bottom:1px dashed rgba(43,38,22,.22);cursor:pointer;word-break:break-word}
+.sticky-item:last-child{border-bottom:none}
+.sticky-item:hover .sticky-text{opacity:.7}
+.sticky-text{text-decoration:line-through;text-decoration-color:transparent;text-decoration-thickness:2px;transition:text-decoration-color .25s,opacity .25s}
+.sticky-item.done{cursor:default}
+.sticky-item.done .sticky-text{text-decoration-color:#2b2616;opacity:.55}
+.sticky-empty{color:rgba(43,38,22,.6);font-size:14px}
+.chart-card-full{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:20px 20px 16px;margin-top:14px;position:relative;transition:border-color .2s}
+.chart-card-full:hover{border-color:var(--border2)}
+.chart-card-full-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.chart-card-full-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.chart-card-full-sub{font-size:12px;color:var(--muted2);margin-top:3px}
+.perf-legend{display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:10px}
+.perf-legend-item{display:flex;align-items:center;gap:5px}
+.perf-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.perf-score{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;line-height:1}
+.perf-score.positive{color:#5aab7a}
+.perf-score.negative{color:var(--red)}
+.perf-score.zero{color:var(--muted2)}
+.chart-wrap-tall{position:relative;height:180px}
+.focus-card{margin-top:14px}
+.focus-body{display:flex;align-items:center;gap:32px;flex-wrap:wrap;padding-top:4px}
+.focus-ring-wrap{position:relative;width:140px;height:140px;flex-shrink:0}
+.focus-ring{width:140px;height:140px;transform:rotate(-90deg)}
+.focus-ring-track{fill:none;stroke:var(--s3);stroke-width:9}
+.focus-ring-progress{fill:none;stroke:#5aab7a;stroke-width:9;stroke-linecap:round;stroke-dasharray:389.6;stroke-dashoffset:0;transition:stroke-dashoffset .3s linear,stroke .3s}
+.focus-ring-progress.on-break{stroke:#e0a952}
+.focus-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.focus-time{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;letter-spacing:-.5px}
+.focus-mode-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted2);margin-top:2px}
+.focus-controls{flex:1;min-width:240px;display:flex;flex-direction:column;gap:12px}
+.focus-presets{display:flex;gap:8px;flex-wrap:wrap}
+.focus-preset{background:var(--s2);border:1px solid var(--border);color:var(--muted2);font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer;transition:all .15s}
+.focus-preset:hover{border-color:var(--border2);color:var(--text)}
+.focus-preset.active{background:var(--s3);border-color:#5aab7a;color:#5aab7a}
+.focus-hint{font-size:12px;color:var(--muted2);line-height:1.4}
+.focus-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.focus-btn{background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;font-weight:500;padding:9px 16px;border-radius:8px;cursor:pointer;transition:all .15s}
+.focus-btn:hover{border-color:var(--border2);background:var(--s3)}
+.focus-btn-primary{background:#5aab7a;border-color:#5aab7a;color:#06120a;font-weight:600}
+.focus-btn-primary:hover{background:#6cbd8c;border-color:#6cbd8c}
+.focus-btn-primary.is-running{background:var(--red);border-color:var(--red);color:#1a0606}
+.focus-btn-primary.is-running:hover{background:#e86a6a;border-color:#e86a6a}
+@media (max-width:640px){.focus-body{flex-direction:column;align-items:stretch}.focus-ring-wrap{align-self:center}}
+.sync-status{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);padding:0 8px;margin-top:4px;display:flex;align-items:center;gap:6px}
+.sync-status .dot{width:6px;height:6px;border-radius:50%;background:var(--muted);transition:background .3s}
+.sync-status.online .dot{background:#5aab7a}
+.sync-status.syncing .dot{background:#e0a952;animation:pulse 1s infinite}
+.sync-status.offline .dot{background:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="app">
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-text">Task<span>Flow</span></div>
+    <div class="logo-sub"><span class="sync-dot"></span>cloud-synced</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Modules</div>
+    <button class="all-btn active" id="all-btn" onclick="selectModule('__all__')">
+      <span style="font-size:16px;width:28px;text-align:center">🗂</span>
+      <span>All Modules</span>
+    </button>
+    <div id="sidebar-modules"></div>
+  </div>
+  <div class="sidebar-bottom">
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" onchange="importExcel(event)">
+    <button class="btn-excel btn-import" onclick="document.getElementById('file-input').click()">📥 Import Excel</button>
+    <button class="btn-excel btn-export" onclick="exportExcel()">📊 Export to Excel</button>
+    <button class="btn-excel" style="background:rgba(90,171,122,.1);border-color:rgba(90,171,122,.3);color:#5aab7a" onclick="forceSyncNow()">🔄 Sync Now</button>
+    <div class="sync-status" id="sync-status"><span class="dot"></span><span id="sync-text">Connecting…</span></div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="main-header"><div>
+    <div class="main-title">Study <span class="hl">Progress</span> Tracker</div>
+    <div class="main-sub" id="active-module-sub">Viewing all modules</div>
+  </div></div>
+
+  <div class="global-stats">
+    <div class="gstat"><div class="gstat-num" id="gs-total">0</div><div class="gstat-lbl">Total Tasks</div></div>
+    <div class="gstat"><div class="gstat-num" id="gs-remaining">0</div><div class="gstat-lbl">Remaining</div></div>
+    <div class="gstat"><div class="gstat-num" id="gs-done">0</div><div class="gstat-lbl">Completed</div></div>
+    <div class="gstat"><div class="gstat-num" id="gs-pct">0%</div><div class="gstat-lbl">Overall Done</div></div>
+  </div>
+
+  <div class="deadline-board">
+    <div class="deadline-board-header"><div class="deadline-board-title">⏰ Deadlines <span class="deadline-board-count" id="dl-board-count">0</span></div></div>
+    <div class="deadline-scroll" id="deadline-scroll"></div>
+  </div>
+
+  <div class="sticky-section">
+    <div class="deadline-board-header"><div class="deadline-board-title">📌 Due Today <span class="deadline-board-count" id="sticky-count">0</span></div></div>
+    <div class="sticky-wall" id="sticky-wall"></div>
+  </div>
+
+  <div class="charts-section">
+    <div class="charts-header">
+      <div class="charts-title">📈 Progress Charts</div>
+      <div class="chart-tabs">
+        <button class="chart-tab active" id="tab-daily" onclick="setChartMode('daily')">Daily</button>
+        <button class="chart-tab" id="tab-weekly" onclick="setChartMode('weekly')">Weekly</button>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-card-title" id="chart1-title">Tasks Completed / Day</div>
+        <div class="chart-card-sub" id="chart1-sub">Last 14 days</div>
+        <div class="chart-peak" id="chart1-peak" style="color:var(--accent-l)"></div>
+        <div class="chart-wrap"><canvas id="chart-completed"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title" id="chart2-title">Cumulative Done</div>
+        <div class="chart-card-sub" id="chart2-sub">Total completed over time</div>
+        <div class="chart-peak" id="chart2-peak" style="color:var(--muted2)"></div>
+        <div class="chart-wrap"><canvas id="chart-cumulative"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card-full">
+      <div class="chart-card-full-header">
+        <div><div class="chart-card-full-title">Deadline Performance — 5-Day Blocks</div>
+          <div class="chart-card-full-sub">Score resets every 5 days · last 30 days shown</div></div>
+        <div><div style="font-size:10px;color:var(--muted);font-family:JetBrains Mono,monospace;text-align:right">Current block</div>
+          <div class="perf-score zero" id="perf-score-5day">0</div></div>
+      </div>
+      <div class="chart-wrap-tall"><canvas id="chart-dl-perf-5day"></canvas></div>
+    </div>
+
+    <div class="chart-card-full" style="margin-top:14px">
+      <div class="chart-card-full-header">
+        <div><div class="chart-card-full-title">Deadline Performance — Monthly</div>
+          <div class="chart-card-full-sub">Score resets each month · last 6 months shown</div></div>
+        <div><div style="font-size:10px;color:var(--muted);font-family:JetBrains Mono,monospace;text-align:right">This month</div>
+          <div class="perf-score zero" id="perf-score-monthly">0</div></div>
+      </div>
+      <div class="chart-wrap-tall"><canvas id="chart-dl-perf-monthly"></canvas></div>
+    </div>
+
+    <div class="chart-card-full focus-card" style="margin-top:14px">
+      <div class="chart-card-full-header">
+        <div><div class="chart-card-full-title">🎯 Focus Timer</div>
+          <div class="chart-card-full-sub" id="focus-sub">Short work bursts with built-in breaks</div></div>
+        <div><div style="font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:right">Sessions today</div>
+          <div class="perf-score zero" id="focus-session-count">0</div></div>
+      </div>
+      <div class="focus-body">
+        <div class="focus-ring-wrap">
+          <svg class="focus-ring" viewBox="0 0 140 140">
+            <circle class="focus-ring-track" cx="70" cy="70" r="62"></circle>
+            <circle class="focus-ring-progress" id="focus-ring-progress" cx="70" cy="70" r="62"></circle>
+          </svg>
+          <div class="focus-ring-center">
+            <div class="focus-time" id="focus-time">25:00</div>
+            <div class="focus-mode-label" id="focus-mode-label">Focus</div>
+          </div>
+        </div>
+        <div class="focus-controls">
+          <div class="focus-presets" id="focus-presets">
+            <button class="focus-preset active" data-work="25" data-break="5">25 / 5</button>
+            <button class="focus-preset" data-work="15" data-break="5">15 / 5</button>
+            <button class="focus-preset" data-work="50" data-break="10">50 / 10</button>
+            <button class="focus-preset" data-work="10" data-break="2">10 / 2</button>
+          </div>
+          <div class="focus-hint">Pick whatever feels doable right now — a short block still counts.</div>
+          <div class="focus-buttons">
+            <button class="focus-btn focus-btn-primary" id="focus-start-btn" onclick="focusTimerToggle()">Start</button>
+            <button class="focus-btn" onclick="focusTimerReset()">Reset</button>
+            <button class="focus-btn" onclick="focusTimerSkip()">Skip to break</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="module-cards-section">
+    <div class="section-header" style="margin-bottom:14px"><div class="section-title">📦 Modules</div></div>
+    <div class="module-grid" id="module-grid"></div>
+  </div>
+
+  <div class="manage-section">
+    <div class="manage-title">
+      <span>⚙ Manage Modules</span>
+      <button class="toggle-btn" onclick="toggleManage()" id="manage-toggle">▼</button>
+    </div>
+    <div id="manage-body">
+      <div class="mod-chips" id="mod-chips"></div>
+      <div class="add-mod-row">
+        <input type="text" id="mod-name-input" placeholder="New module name..." style="flex:1;min-width:140px" />
+        <input type="text" id="mod-icon-input" placeholder="🎯" style="width:70px;text-align:center" maxlength="2" />
+        <button class="btn-add" onclick="addModule()">+ Module</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="add-box">
+    <div class="add-box-title">+ Add Task</div>
+    <div class="add-row">
+      <input type="text" id="task-input" placeholder="What needs to be done?" />
+      <select id="mod-select" style="min-width:150px"></select>
+      <select id="pri-select">
+        <option value="High">🔴 High</option>
+        <option value="Medium" selected>🟡 Medium</option>
+        <option value="Low">🟢 Low</option>
+      </select>
+      <input type="datetime-local" id="deadline-input" class="dl-input-form" title="Set deadline (optional)" />
+      <button class="btn-add" onclick="addTask()">ADD →</button>
+    </div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title" id="task-section-title">Tasks <span class="section-badge" id="task-count-badge">0</span></div>
+    <div class="filter-row">
+      <button class="fbtn active" id="filter-all-btn" onclick="setFilter('all',this)">All</button>
+      <button class="fbtn" id="filter-pending-btn" onclick="setFilter('pending',this)">Pending</button>
+      <button class="fbtn" id="filter-done-btn" onclick="setFilter('done',this)">Done</button>
+      <button class="btn-clear-done" onclick="confirmClearDone()">🗑 Remove All Done</button>
+    </div>
+  </div>
+
+  <div class="task-list" id="task-list"></div>
+</main>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>Remove All Completed?</h2>
+    <p>This will permanently delete all tasks marked as <strong>Done</strong> from the current view.</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" onclick="clearDone()">Yes, Remove All</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Firebase Config ──────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyBzdLGnyfikv3RvrCupEY08tDwM-JGMQ2k",
+  authDomain: "taskflow-37f26.firebaseapp.com",
+  projectId: "taskflow-37f26",
+  storageBucket: "taskflow-37f26.firebasestorage.app",
+  messagingSenderId: "700186074914",
+  appId: "1:700186074914:web:5c2a0ca1ef0ef831e84f7b",
+  measurementId: "G-SJ41QRSMHL"
+};
+
+let fbApp, fbDb, fbAuth;
+let currentUser = null;
+
+let tasks = [];
+let modules = [];
+let deadlineEvents = [];
+let activeModule = '__all__';
+let activeFilter = 'all';
+let nextId = 1;
+let manageOpen = true;
+
+let pushTimer = null;
+let pollTimer = null;
+let lastCloudTs = 0;
+let syncing = false;
+let localDirty = false;
+let isOnline = navigator.onLine;
+
+const COLORS = ['#e0e0e0','#aaaaaa','#777777','#555555','#999999','#cccccc','#666666','#bbbbbb'];
+const DEFAULT_MODULES = [
+  { name: 'ML Foundations', icon: '🧠', color: '#e0e0e0' },
+  { name: 'Python & Tools', icon: '🐍', color: '#aaaaaa' },
+  { name: 'Deep Learning', icon: '⚡', color: '#777777' },
+  { name: 'LSTM Project', icon: '📈', color: '#555555' },
+  { name: 'Revision', icon: '📚', color: '#999999' }
+];
+
+// ─── Sync Status UI ───────────────────────────────────────────
+function setSyncStatus(state, text) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.className = 'sync-status ' + state;
+  document.getElementById('sync-text').textContent = text;
+}
+
+// ─── Boot: Firebase init + anonymous auth ────────────────────
+async function boot() {
+  setSyncStatus('syncing', 'Connecting…');
+  try {
+    fbApp = firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.firestore();
+    fbAuth = firebase.auth();
+
+    const cred = await fbAuth.signInAnonymously();
+    currentUser = cred.user;
+    console.log('[TaskFlow] Signed in:', currentUser.uid);
+
+    await fullSync();
+    renderAll();
+    setSyncStatus('online', 'Synced');
+
+    pollTimer = setInterval(() => {
+      if (!syncing && isOnline && currentUser) pullFromCloud().catch(() => {});
+    }, 15000);
+
+    setInterval(() => {
+      if (localDirty && !syncing && isOnline) pushToCloud().catch(() => {});
+    }, 8000);
+
+  } catch (e) {
+    console.error('[TaskFlow] Boot failed:', e);
+    setSyncStatus('offline', 'Auth failed');
+    renderAll();
+  }
+}
+
+// ─── Cloud helpers ────────────────────────────────────────────
+const DOC_REF = () => fbDb.collection('taskflow').doc('main');
+
+async function readCloud() {
+  const snap = await DOC_REF().get();
+  return snap.exists ? snap.data() : null;
+}
+
+async function writeCloud(payload) {
+  await DOC_REF().set(payload);
+}
+
+// ─── Merge strategy ───────────────────────────────────────────
+function mergeData(local, cloud) {
+  if (!cloud) return local;
+  if (!local) return cloud;
+  return {
+    tasks:           mergeArrays(local.tasks || [],           cloud.tasks || [],           'id'),
+    modules:         mergeModules(local.modules || [],         cloud.modules || []),
+    deadlineEvents:  mergeArrays(local.deadlineEvents || [],  cloud.deadlineEvents || [],  'uid'),
+    _ts:             Math.max(local._ts || 0, cloud._ts || 0)
+  };
+}
+function mergeArrays(a, b, idKey) {
+  const map = new Map();
+  [...a, ...b].forEach(item => {
+    if (!item || item[idKey] == null) return;
+    const existing = map.get(item[idKey]);
+    if (!existing) { map.set(item[idKey], item); return; }
+    const aT = item.completed || item.date || 0;
+    const bT = existing.completed || existing.date || 0;
+    if (new Date(aT) >= new Date(bT)) map.set(item[idKey], item);
+  });
+  return Array.from(map.values());
+}
+function mergeModules(a, b) {
+  const map = new Map();
+  [...a, ...b].forEach(m => {
+    if (m && m.name && !map.has(m.name)) map.set(m.name, m);
+  });
+  return Array.from(map.values());
+}
+
+// ─── Core sync ────────────────────────────────────────────────
+async function pushToCloud() {
+  if (!currentUser || !isOnline) return;
+  const payload = {
+    tasks:          tasks,
+    modules:        modules,
+    deadlineEvents: deadlineEvents,
+    _ts:            Date.now()
+  };
+  await writeCloud(payload);
+  lastCloudTs = payload._ts;
+  localDirty = false;
+}
+
+async function pullFromCloud() {
+  if (!currentUser || !isOnline) return false;
+  const cloud = await readCloud();
+  if (!cloud) return false;
+  const cloudTs = cloud._ts || 0;
+  if (cloudTs <= lastCloudTs) return false;
+  lastCloudTs = cloudTs;
+  const local = { tasks, modules, deadlineEvents, _ts: cloudTs };
+  const merged = mergeData(local, cloud);
+  const currentJson = JSON.stringify({ t: tasks, m: modules, d: deadlineEvents });
+  const mergedJson  = JSON.stringify({ t: merged.tasks, m: merged.modules, d: merged.deadlineEvents });
+  if (mergedJson !== currentJson) {
+    tasks = merged.tasks;
+    modules = merged.modules;
+    deadlineEvents = merged.deadlineEvents;
+    renderAll();
+    return true;
+  }
+  return false;
+}
+
+async function fullSync() {
+  if (!currentUser || !isOnline || syncing) return;
+  syncing = true;
+  setSyncStatus('syncing', 'Syncing…');
+  try {
+    await pushToCloud();
+    await pullFromCloud();
+    setSyncStatus('online', 'Synced');
+  } catch (e) {
+    console.error('[TaskFlow] Sync error:', e);
+    setSyncStatus('offline', 'Sync error');
+  } finally {
+    syncing = false;
+  }
+}
+
+function schedulePush() {
+  if (!currentUser || !isOnline) return;
+  localDirty = true;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => fullSync(), 1200);
+}
+
+function forceSyncNow() {
+  if (!isOnline) { setSyncStatus('offline', 'Offline'); return; }
+  if (!currentUser) { setSyncStatus('offline', 'Not signed in'); return; }
+  fullSync();
+}
+
+window.addEventListener('online', () => {
+  isOnline = true;
+  setSyncStatus('online', 'Back online');
+  if (currentUser) fullSync();
+});
+window.addEventListener('offline', () => {
+  isOnline = false;
+  setSyncStatus('offline', 'Offline — local only');
+});
+
+// ─── Helpers ──────────────────────────────────────────────────
+function ts() { return new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+function tsISO() { return new Date().toISOString(); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+let toastTimer;
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+function getModuleColor(name) {
+  const m = modules.find(x => x.name === name);
+  if (m && m.color) return m.color;
+  const idx = modules.findIndex(x => x.name === name);
+  return COLORS[idx % COLORS.length];
+}
+function getModulePct(name) {
+  const mTasks = tasks.filter(t => t.module === name);
+  if (mTasks.length === 0) return 100;
+  const done = mTasks.filter(t => t.status === 'Done').length;
+  return Math.round((done / mTasks.length) * 100);
+}
+
+// ─── Modules ──────────────────────────────────────────────────
+function addModule() {
+  const name = document.getElementById('mod-name-input').value.trim();
+  const icon = document.getElementById('mod-icon-input').value.trim() || '📌';
+  if (!name) { toast('⚠ Enter a module name', true); return; }
+  if (modules.find(m => m.name.toLowerCase() === name.toLowerCase())) { toast('⚠ Module already exists', true); return; }
+  modules.push({ name, icon, color: COLORS[modules.length % COLORS.length] });
+  document.getElementById('mod-name-input').value = '';
+  document.getElementById('mod-icon-input').value = '';
+  renderAll(); schedulePush(); toast('✓ Module added!');
+}
+function deleteModule(name) {
+  if (tasks.some(t => t.module === name)) { toast('⚠ Move or delete tasks first', true); return; }
+  modules = modules.filter(m => m.name !== name);
+  if (activeModule === name) activeModule = '__all__';
+  renderAll(); schedulePush(); toast('Module removed');
+}
+function selectModule(name) { activeModule = name; renderAll(); }
+function toggleManage() {
+  manageOpen = !manageOpen;
+  document.getElementById('manage-body').style.display = manageOpen ? '' : 'none';
+  document.getElementById('manage-toggle').textContent = manageOpen ? '▲' : '▼';
+}
+
+// ─── Tasks ────────────────────────────────────────────────────
+function addTask() {
+  const input = document.getElementById('task-input');
+  const text = input.value.trim();
+  const mod = document.getElementById('mod-select').value;
+  const pri = document.getElementById('pri-select').value;
+  if (!text) { toast('⚠ Type a task first!', true); return; }
+  if (!mod) { toast('⚠ Select a module first!', true); return; }
+  const dlRaw = document.getElementById('deadline-input').value;
+  const t = { id: nextId++, module: mod, task: text, priority: pri, status: 'Pending', created: ts(), completed: '', deadline: dlRaw ? new Date(dlRaw).toISOString() : '' };
+  tasks.unshift(t);
+  input.value = '';
+  document.getElementById('deadline-input').value = '';
+  renderAll(); schedulePush(); toast('✓ Task added!');
+}
+function completeTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.status === 'Done') return;
+  t.status = 'Done';
+  t.completed = tsISO();
+  if (t.deadline) {
+    const comp = new Date(t.completed);
+    const dl = new Date(t.deadline);
+    const type = comp <= dl ? 'hit' : 'miss';
+    recordDeadlineEvent(t, type, type === 'hit' ? comp : dl);
+  }
+  renderStats(); renderSidebar(); renderModuleGrid();
+  renderDeadlineBoard(); renderStickyNotes(); renderTaskList();
+  startTimers(); renderCharts(true);
+  schedulePush();
+  playCompleteSound();
+  toast('🎉 Task completed!');
+}
+function deleteTask(id) {
+  tasks = tasks.filter(x => x.id !== id);
+  renderAll(); schedulePush(); toast('🗑 Task deleted');
+}
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTaskList();
+}
+function confirmClearDone() { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function clearDone() {
+  closeModal();
+  const toDelete = activeModule === '__all__' ? tasks.filter(t => t.status === 'Done') : tasks.filter(t => t.module === activeModule && t.status === 'Done');
+  tasks = tasks.filter(t => !toDelete.includes(t));
+  renderAll(); schedulePush();
+  toast('🗑 Removed ' + toDelete.length + ' task' + (toDelete.length !== 1 ? 's' : ''));
+}
+function toLocalInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const localMs = d.getTime() - d.getTimezoneOffset() * 60000;
+  return new Date(localMs).toISOString().slice(0, 16);
+}
+function setDeadline(id, value) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  t.deadline = value ? new Date(value).toISOString() : '';
+  renderDeadlineBoard(); renderStickyNotes(); renderTaskList(); startTimers();
+  schedulePush();
+  toast(value ? '⏰ Deadline set!' : 'Deadline cleared');
+}
+function clearDeadline(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  t.deadline = '';
+  renderDeadlineBoard(); renderStickyNotes(); renderTaskList();
+  schedulePush();
+  toast('Deadline cleared');
+}
+function recordDeadlineEvent(task, type, eventDate) {
+  if (deadlineEvents.some(e => e.taskId === task.id)) return;
+  const ev = { uid: Date.now() + '-' + Math.random().toString(36).slice(2), taskId: task.id, taskName: task.task, module: task.module, type: type, date: eventDate.toISOString() };
+  deadlineEvents.push(ev);
+}
+function checkOverdueEvents() {
+  const now = new Date();
+  let changed = false;
+  tasks.forEach(t => {
+    if (!t.deadline || t.status === 'Done') return;
+    if (new Date(t.deadline) < now && !deadlineEvents.some(e => e.taskId === t.id)) {
+      recordDeadlineEvent(t, 'miss', new Date(t.deadline));
+      changed = true;
+    }
+  });
+  if (changed) schedulePush();
+}
+
+// ─── Timers ───────────────────────────────────────────────────
+let _timerInterval = null;
+function startTimers() {
+  if (_timerInterval) clearInterval(_timerInterval);
+  updateTimers();
+  _timerInterval = setInterval(updateTimers, 1000);
+}
+function updateTimers() {
+  checkOverdueEvents();
+  const now = Date.now();
+  document.querySelectorAll('.timer-display').forEach(el => {
+    const deadline = new Date(el.dataset.deadline).getTime();
+    const taskId = el.dataset.taskid;
+    const diff = deadline - now;
+    const txtEl = document.getElementById('txt-' + taskId);
+    const taskEl = document.getElementById('ti-' + taskId);
+    const cardEl = document.getElementById('dlc-' + taskId);
+    const cardNameEl = document.getElementById('dlc-name-' + taskId);
+    const fmt = n => String(n).padStart(2, '0');
+    if (diff <= 0) {
+      el.innerHTML = '<span class="overdue-badge">⚠ OVERDUE</span>';
+      if (txtEl) txtEl.classList.add('overdue-text');
+      if (taskEl) taskEl.classList.add('overdue');
+      if (cardEl) { cardEl.classList.add('overdue-card'); cardEl.classList.remove('urgent-card','soon-card'); }
+      if (cardNameEl) cardNameEl.style.color = 'var(--red)';
+    } else {
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      el.innerHTML = '<span class="timer-wrap"><span class="timer-block"><span class="timer-num">'+fmt(d)+'</span><span class="timer-lbl">d</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">'+fmt(h)+'</span><span class="timer-lbl">h</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">'+fmt(m)+'</span><span class="timer-lbl">m</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">'+fmt(s)+'</span><span class="timer-lbl">s</span></span></span>';
+      if (txtEl) txtEl.classList.remove('overdue-text');
+      if (taskEl) taskEl.classList.remove('overdue');
+    }
+  });
+}
+
+// ─── Render ───────────────────────────────────────────────────
+function renderAll() {
+  renderSidebar(); renderModuleGrid(); renderModuleSelect();
+  renderModChips(); renderStats(); renderDeadlineBoard();
+  renderStickyNotes(); renderTaskList(); updateHeader(); renderCharts();
+  startTimers();
+}
+function renderSidebar() {
+  const container = document.getElementById('sidebar-modules');
+  document.getElementById('all-btn').className = 'all-btn' + (activeModule === '__all__' ? ' active' : '');
+  container.innerHTML = modules.map(m => {
+    const pct = getModulePct(m.name);
+    const r = 13, circ = 2 * Math.PI * r;
+    const offset = circ - (pct / 100) * circ;
+    return '<div class="mod-item '+(activeModule === m.name ? 'active' : '')+'" onclick="selectModule(\''+esc(m.name).replace(/'/g, "\\'")+'\')"><span class="mod-icon">'+m.icon+'</span><div class="mod-info"><div class="mod-name">'+esc(m.name)+'</div><div class="mod-mini-pct" style="color:'+m.color+'">'+pct+'% done</div></div><svg class="ring-mini" viewBox="0 0 32 32"><circle class="ring-bg" cx="16" cy="16" r="'+r+'" /><circle class="ring-fill" cx="16" cy="16" r="'+r+'" stroke="'+m.color+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'" transform="rotate(-90 16 16)" /></svg></div>';
+  }).join('');
+}
+function renderModuleGrid() {
+  const grid = document.getElementById('module-grid');
+  const section = document.getElementById('module-cards-section');
+  section.style.display = (activeModule === '__all__') ? '' : 'none';
+  grid.innerHTML = modules.map(m => {
+    const pct = getModulePct(m.name);
+    const mTasks = tasks.filter(t => t.module === m.name);
+    const done = mTasks.filter(t => t.status === 'Done').length;
+    const r = 18, circ = 2 * Math.PI * r;
+    const offset = circ - (pct / 100) * circ;
+    return '<div class="module-card '+(activeModule === m.name ? 'active' : '')+'" onclick="selectModule(\''+esc(m.name).replace(/'/g, "\\'")+'\')"><div class="mc-top"><span class="mc-icon">'+m.icon+'</span><svg class="mc-ring" viewBox="0 0 44 44"><circle class="ring-bg" cx="22" cy="22" r="'+r+'" stroke="'+m.color+'" opacity="0.2" /><circle class="ring-fill" cx="22" cy="22" r="'+r+'" stroke="'+m.color+'" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'" transform="rotate(-90 22 22)" /><text x="22" y="27" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="'+m.color+'" font-weight="600">'+pct+'%</text></svg></div><div class="mc-name">'+esc(m.name)+'</div><div class="mc-stat">'+done+'/'+mTasks.length+' tasks</div></div>';
+  }).join('');
+}
+function renderModuleSelect() {
+  const sel = document.getElementById('mod-select');
+  const current = (activeModule !== '__all__') ? activeModule : (sel.value || '');
+  sel.innerHTML = modules.map(m => '<option value="'+esc(m.name)+'" '+(m.name === current ? 'selected' : '')+'>'+m.icon+' '+m.name+'</option>').join('');
+  if (activeModule !== '__all__') sel.value = activeModule;
+}
+function renderModChips() {
+  document.getElementById('mod-chips').innerHTML = modules.map(m => '<div class="mod-chip"><span>'+m.icon+'</span><span style="color:'+m.color+';font-size:12px">'+esc(m.name)+'</span><button class="mod-chip-del" onclick="deleteModule(\''+esc(m.name).replace(/'/g, "\\'")+'\')" title="Delete module">✕</button></div>').join('');
+}
+function renderStats() {
+  const relevant = activeModule === '__all__' ? tasks : tasks.filter(t => t.module === activeModule);
+  const total = relevant.length;
+  const done = relevant.filter(t => t.status === 'Done').length;
+  const pct = total ? Math.round(done / total * 100) : (activeModule === '__all__' ? 0 : 100);
+  document.getElementById('gs-total').textContent = total;
+  document.getElementById('gs-remaining').textContent = total - done;
+  document.getElementById('gs-done').textContent = done;
+  document.getElementById('gs-pct').textContent = pct + '%';
+}
+function renderTaskList() {
+  let filtered = activeModule === '__all__' ? [...tasks] : tasks.filter(t => t.module === activeModule);
+  if (activeFilter === 'pending') filtered = filtered.filter(t => t.status === 'Pending');
+  if (activeFilter === 'done') filtered = filtered.filter(t => t.status === 'Done');
+  document.getElementById('task-count-badge').textContent = filtered.length;
+  const list = document.getElementById('task-list');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">'+(activeFilter === 'done' ? '🏆' : '📋')+'</div><div class="empty-text">'+(activeFilter === 'done' ? 'No completed tasks yet' : 'No tasks here!')+'</div></div>';
+    return;
+  }
+  const now = Date.now();
+  list.innerHTML = filtered.map(t => {
+    const priClass = t.priority==='High' ? 'tag-high' : t.priority==='Low' ? 'tag-low' : 'tag-medium';
+    const priIcon = t.priority==='High' ? '🔴' : t.priority==='Low' ? '🟢' : '🟡';
+    const modColor = getModuleColor(t.module);
+    const hasDeadline = t.deadline && t.deadline !== '';
+    const isOverdue = hasDeadline && t.status !== 'Done' && new Date(t.deadline).getTime() < now;
+    const dlValue = hasDeadline ? toLocalInputValue(t.deadline) : '';
+    const timerHtml = hasDeadline && t.status !== 'Done' ? '<div class="timer-display" data-deadline="'+t.deadline+'" data-taskid="'+t.id+'"><span class="timer-wrap"><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">d</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">h</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">m</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">s</span></span></span></div>' : '';
+    const deadlineRow = t.status !== 'Done' ? '<div class="deadline-row">'+timerHtml+'<span class="dl-label-icon">⏰</span><input type="datetime-local" class="dl-input-inline" value="'+dlValue+'" onchange="setDeadline('+t.id+', this.value)" title="'+(hasDeadline ? 'Change deadline' : 'Set deadline')+'" />'+(hasDeadline ? '<button class="dl-clear" onclick="clearDeadline('+t.id+')" title="Clear deadline">✕</button>' : '')+'</div>' : '';
+    return '<div class="task-item '+(t.status==='Done'?'done':'')+' '+(isOverdue?'overdue':'')+'" id="ti-'+t.id+'"><div class="check-btn" onclick="completeTask('+t.id+')">'+(t.status==='Done'?'✓':'')+'</div><div class="task-body"><div class="task-txt '+(isOverdue?'overdue-text':'')+'" id="txt-'+t.id+'">'+esc(t.task)+'</div><div class="task-tags"><span class="tag tag-mod" style="background:'+modColor+'22;color:'+modColor+'">'+esc(t.module)+'</span><span class="tag '+priClass+'">'+priIcon+' '+t.priority+'</span>'+(t.status==='Done'?'<span class="tag tag-done">✓ Done</span>':'')+'<span class="task-date">'+t.created+'</span></div>'+deadlineRow+'</div><button class="del-btn" onclick="deleteTask('+t.id+')">✕</button></div>';
+  }).join('');
+}
+function updateHeader() {
+  const sub = document.getElementById('active-module-sub');
+  const title = document.getElementById('task-section-title');
+  if (activeModule === '__all__') {
+    sub.textContent = 'Viewing all modules';
+    title.innerHTML = 'Tasks <span class="section-badge" id="task-count-badge">0</span>';
+  } else {
+    const m = modules.find(x => x.name === activeModule);
+    sub.textContent = 'Module: ' + (m ? m.icon + ' ' + m.name : activeModule);
+    title.innerHTML = (m ? m.icon : '') + ' ' + esc(activeModule) + ' <span class="section-badge" id="task-count-badge">0</span>';
+  }
+  renderTaskList();
+}
+function dayKey(d) {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return y + '-' + mo + '-' + da;
+}
+function renderStickyNotes() {
+  const wall = document.getElementById('sticky-wall');
+  const countEl = document.getElementById('sticky-count');
+  if (!wall) return;
+  const todayKey = dayKey(new Date());
+  const todays = tasks.filter(t => t.deadline && t.deadline !== '' && !isNaN(new Date(t.deadline)) && dayKey(new Date(t.deadline)) === todayKey).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  countEl.textContent = todays.filter(t => t.status !== 'Done').length;
+  const body = todays.length ? todays.map(t => {
+    const done = t.status === 'Done';
+    return '<div class="sticky-item '+(done ? 'done' : '')+'" '+(done ? '' : 'onclick="completeTask('+t.id+')" title="Click to mark done"')+'><span class="sticky-text">'+esc(t.task)+'</span></div>';
+  }).join('') : '<div class="sticky-empty">Nothing due today 🎉</div>';
+  wall.innerHTML = '<div class="sticky-note">'+body+'</div>';
+}
+function renderDeadlineBoard() {
+  const scroll = document.getElementById('deadline-scroll');
+  const countEl = document.getElementById('dl-board-count');
+  const dlTasks = tasks.filter(t => t.deadline && t.deadline !== '' && t.status !== 'Done').sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  countEl.textContent = dlTasks.length;
+  if (!dlTasks.length) { scroll.innerHTML = ''; return; }
+  const now = Date.now();
+  scroll.innerHTML = dlTasks.map(t => {
+    const dl = new Date(t.deadline);
+    const dlMs = dl.getTime();
+    const diff = dlMs - now;
+    const isOverdue = diff <= 0;
+    const hoursLeft = diff / 3600000;
+    const cardClass = isOverdue ? 'overdue-card' : hoursLeft < 24 ? 'urgent-card' : 'soon-card';
+    const modColor = getModuleColor(t.module);
+    const dlDate = dl.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const dlTime = dl.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return '<div class="dl-card '+cardClass+'" id="dlc-'+t.id+'"><div class="dl-card-module" style="color:'+modColor+'">'+esc(t.module)+'</div><div class="dl-card-name" id="dlc-name-'+t.id+'">'+esc(t.task)+'</div><div class="dl-card-deadline-dt '+(isOverdue ? 'overdue-dt' : '')+'">📅 '+dlDate+' &nbsp;·&nbsp; ⏰ '+dlTime+'</div><div class="dl-card-timer"><div class="timer-display board-timer" data-deadline="'+t.deadline+'" data-taskid="'+t.id+'"><span class="timer-wrap"><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">d</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">h</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">m</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">s</span></span></span></div></div></div>';
+  }).join('');
+}
+
+// ─── Charts ───────────────────────────────────────────────────
+let chartMode = 'daily';
+let chartCompleted = null, chartCumulative = null, chartDlPerf5Day = null, chartDlPerfMonthly = null;
+function weekKey(d) {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + diff);
+  return dayKey(mon);
+}
+function nDaysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function parseCompletedDate(str) {
+  if (!str || str === 'undefined' || str.trim() === '') return null;
+  const d = new Date(str);
+  if (!isNaN(d)) return d;
+  return null;
+}
+function buildDeadlinePerf5Day() {
+  const events = activeModule === '__all__' ? deadlineEvents : deadlineEvents.filter(e => e.module === activeModule);
+  const deltaMap = {};
+  events.forEach(e => {
+    const k = dayKey(new Date(e.date));
+    deltaMap[k] = (deltaMap[k] || 0) + (e.type === 'hit' ? 1 : -1);
+  });
+  const labels = [], scores = [], blockBoundaries = [];
+  let blockScore = 0;
+  for (let i = 29; i >= 0; i--) {
+    const position = 29 - i;
+    if (position % 5 === 0) { blockScore = 0; blockBoundaries.push(position); }
+    const d = nDaysAgo(i);
+    labels.push(d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
+    blockScore += (deltaMap[dayKey(d)] || 0);
+    scores.push(blockScore);
+  }
+  return { labels: labels, scores: scores, blockBoundaries: blockBoundaries };
+}
+function buildDeadlinePerfMonthly() {
+  const monthKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  const events = activeModule === '__all__' ? deadlineEvents : deadlineEvents.filter(e => e.module === activeModule);
+  const monthMap = {};
+  events.forEach(e => {
+    const k = monthKey(new Date(e.date));
+    monthMap[k] = (monthMap[k] || 0) + (e.type === 'hit' ? 1 : -1);
+  });
+  const labels = [], scores = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }));
+    scores.push(monthMap[monthKey(d)] || 0);
+  }
+  return { labels: labels, scores: scores };
+}
+function buildChartData() {
+  const relevant = activeModule === '__all__' ? tasks : tasks.filter(t => t.module === activeModule);
+  const doneTasks = relevant.filter(t => t.status === 'Done' && t.completed && t.completed.trim() !== '');
+  if (chartMode === 'daily') {
+    const N = 14, countMap = {};
+    doneTasks.forEach(t => {
+      const d = parseCompletedDate(t.completed);
+      if (!d) return;
+      const k = dayKey(d);
+      countMap[k] = (countMap[k] || 0) + 1;
+    });
+    const labels = [], counts = [], cumul = [];
+    let running = 0;
+    for (let i = N - 1; i >= 0; i--) {
+      const d = nDaysAgo(i);
+      labels.push(d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
+      const c = countMap[dayKey(d)] || 0;
+      counts.push(c);
+      running += c;
+      cumul.push(running);
+    }
+    return { labels: labels, counts: counts, cumul: cumul };
+  } else {
+    const N = 8, countMap = {};
+    doneTasks.forEach(t => {
+      const d = parseCompletedDate(t.completed);
+      if (!d) return;
+      const k = weekKey(d);
+      countMap[k] = (countMap[k] || 0) + 1;
+    });
+    const labels = [], counts = [], cumul = [], seen = {};
+    let running = 0;
+    for (let i = N - 1; i >= 0; i--) {
+      const k = weekKey(nDaysAgo(i * 7));
+      if (seen[k]) continue;
+      seen[k] = true;
+      const d = new Date(k + 'T00:00:00');
+      labels.push('Wk ' + d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
+      const c = countMap[k] || 0;
+      counts.push(c);
+      running += c;
+      cumul.push(running);
+    }
+    return { labels: labels, counts: counts, cumul: cumul };
+  }
+}
+function makeGradient(ctx, a, b) {
+  const g = ctx.createLinearGradient(0, 0, 0, 160);
+  g.addColorStop(0, a); g.addColorStop(1, b);
+  return g;
+}
+function renderCharts(fast) {
+  const cd = buildChartData();
+  const labels = cd.labels, counts = cd.counts, cumul = cd.cumul;
+  const isDaily = chartMode === 'daily';
+  document.getElementById('chart1-title').textContent = isDaily ? 'Tasks Completed / Day' : 'Tasks Completed / Week';
+  document.getElementById('chart1-sub').textContent = isDaily ? 'Last 14 days' : 'Last 8 weeks';
+  document.getElementById('chart2-title').textContent = 'Cumulative Done';
+  document.getElementById('chart2-sub').textContent = isDaily ? 'Running total — last 14 days' : 'Running total — last 8 weeks';
+  const maxCount = Math.max.apply(null, counts.concat([0]));
+  const maxCumul = Math.max.apply(null, cumul.concat([0]));
+  document.getElementById('chart1-peak').textContent = maxCount > 0 ? maxCount + ' peak' : '';
+  document.getElementById('chart2-peak').textContent = maxCumul > 0 ? maxCumul + ' total' : '';
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d0d0d', borderColor: '#363636', borderWidth: 1, titleColor: '#f2f2f2', bodyColor: '#b5b5b5', titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 12 }, padding: 10, displayColors: false } },
+    scales: { x: { grid: { color: 'rgba(36,36,36,0.9)', drawTicks: false }, ticks: { color: '#505050', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 40 }, border: { color: '#242424' } }, y: { beginAtZero: true, grid: { color: 'rgba(36,36,36,0.9)', drawTicks: false }, ticks: { color: '#505050', font: { family: 'JetBrains Mono', size: 10 }, stepSize: 1, precision: 0 }, border: { color: '#242424' } } }
+  };
+
+  if (chartCompleted && chartCumulative && chartDlPerf5Day && chartDlPerfMonthly) {
+    chartCompleted.data.labels = labels;
+    chartCompleted.data.datasets[0].data = counts;
+    chartCompleted.data.datasets[0].pointRadius = counts.map(c => c > 0 ? 4 : 2);
+    chartCumulative.data.labels = labels;
+    chartCumulative.data.datasets[0].data = cumul;
+    const d5 = buildDeadlinePerf5Day();
+    chartDlPerf5Day.data.labels = d5.labels;
+    chartDlPerf5Day.data.datasets[0].data = d5.scores;
+    chartDlPerf5Day.data.datasets[0].pointBackgroundColor = d5.scores.map(v => v > 0 ? '#5aab7a' : v < 0 ? '#e05252' : '#888888');
+    const cur5 = d5.scores.length ? d5.scores[d5.scores.length - 1] : 0;
+    const s5El = document.getElementById('perf-score-5day');
+    s5El.textContent = (cur5 > 0 ? '+' : '') + cur5;
+    s5El.className = 'perf-score ' + (cur5 > 0 ? 'positive' : cur5 < 0 ? 'negative' : 'zero');
+    const dm = buildDeadlinePerfMonthly();
+    chartDlPerfMonthly.data.labels = dm.labels;
+    chartDlPerfMonthly.data.datasets[0].data = dm.scores;
+    chartDlPerfMonthly.data.datasets[0].pointBackgroundColor = dm.scores.map(v => v > 0 ? '#5aab7a' : v < 0 ? '#e05252' : '#888888');
+    const curM = dm.scores.length ? dm.scores[dm.scores.length - 1] : 0;
+    const sMEl = document.getElementById('perf-score-monthly');
+    sMEl.textContent = (curM > 0 ? '+' : '') + curM;
+    sMEl.className = 'perf-score ' + (curM > 0 ? 'positive' : curM < 0 ? 'negative' : 'zero');
+    const mode = fast ? 'none' : undefined;
+    chartCompleted.update(mode);
+    chartCumulative.update(mode);
+    chartDlPerf5Day.update(mode);
+    chartDlPerfMonthly.update(mode);
+    return;
+  }
+
+  const ctx1 = document.getElementById('chart-completed').getContext('2d');
+  chartCompleted = new Chart(ctx1, { type: 'line', data: { labels: labels, datasets: [{ data: counts, borderColor: '#e0e0e0', borderWidth: 2.5, pointBackgroundColor: '#e0e0e0', pointRadius: counts.map(c => c > 0 ? 4 : 2), pointHoverRadius: 6, fill: true, backgroundColor: makeGradient(ctx1, 'rgba(224,224,224,0.2)', 'rgba(224,224,224,0.01)'), tension: 0.4 }] }, options: baseOpts });
+
+  const ctx2 = document.getElementById('chart-cumulative').getContext('2d');
+  chartCumulative = new Chart(ctx2, { type: 'line', data: { labels: labels, datasets: [{ data: cumul, borderColor: '#888888', borderWidth: 2.5, pointBackgroundColor: '#888888', pointRadius: 3, pointHoverRadius: 6, fill: true, backgroundColor: makeGradient(ctx2, 'rgba(136,136,136,0.2)', 'rgba(136,136,136,0.01)'), tension: 0.4 }] }, options: baseOpts });
+
+  const perfOpts = {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d0d0d', borderColor: '#363636', borderWidth: 1, titleColor: '#f2f2f2', bodyColor: '#b5b5b5', titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 12 }, padding: 10, displayColors: false, callbacks: { label: function(ctx) { const v = ctx.parsed.y; return (v > 0 ? '+' : '') + v + ' score'; } } } },
+    scales: { x: { grid: { color: 'rgba(36,36,36,0.9)', drawTicks: false }, ticks: { color: '#505050', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 15 }, border: { color: '#242424' } }, y: { grid: { color: function(ctx) { return ctx.tick.value === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(36,36,36,0.9)'; }, lineWidth: function(ctx) { return ctx.tick.value === 0 ? 2 : 1; }, drawTicks: false }, ticks: { color: function(ctx) { return ctx.tick.value > 0 ? '#5aab7a' : ctx.tick.value < 0 ? '#e05252' : '#888888'; }, font: { family: 'JetBrains Mono', size: 10 }, stepSize: 1, precision: 0 }, border: { color: '#242424' } } }
+  };
+  const perfDataset = function(scores) { return { data: scores, segment: { borderColor: function(ctx) { const y0 = ctx.p0.parsed.y, y1 = ctx.p1.parsed.y; return (y0 >= 0 && y1 >= 0) ? '#5aab7a' : (y0 < 0 && y1 < 0) ? '#e05252' : '#888888'; } }, borderWidth: 2.5, pointBackgroundColor: scores.map(function(v) { return v > 0 ? '#5aab7a' : v < 0 ? '#e05252' : '#888888'; }), pointBorderColor: 'transparent', pointRadius: 4, pointHoverRadius: 7, fill: false, tension: 0.3 }; };
+
+  const d5 = buildDeadlinePerf5Day();
+  const ctx3 = document.getElementById('chart-dl-perf-5day').getContext('2d');
+  chartDlPerf5Day = new Chart(ctx3, { type: 'line', data: { labels: d5.labels, datasets: [perfDataset(d5.scores)] }, options: perfOpts });
+
+  const dm = buildDeadlinePerfMonthly();
+  const ctx4 = document.getElementById('chart-dl-perf-monthly').getContext('2d');
+  chartDlPerfMonthly = new Chart(ctx4, { type: 'line', data: { labels: dm.labels, datasets: [perfDataset(dm.scores)] }, options: perfOpts });
+
+  const cur5 = d5.scores.length ? d5.scores[d5.scores.length - 1] : 0;
+  const s5El = document.getElementById('perf-score-5day');
+  s5El.textContent = (cur5 > 0 ? '+' : '') + cur5;
+  s5El.className = 'perf-score ' + (cur5 > 0 ? 'positive' : cur5 < 0 ? 'negative' : 'zero');
+  const curM = dm.scores.length ? dm.scores[dm.scores.length - 1] : 0;
+  const sMEl = document.getElementById('perf-score-monthly');
+  sMEl.textContent = (curM > 0 ? '+' : '') + curM;
+  sMEl.className = 'perf-score ' + (curM > 0 ? 'positive' : curM < 0 ? 'negative' : 'zero');
+}
+function setChartMode(mode) {
+  chartMode = mode;
+  document.getElementById('tab-daily').classList.toggle('active', mode === 'daily');
+  document.getElementById('tab-weekly').classList.toggle('active', mode === 'weekly');
+  if (chartCompleted) { chartCompleted.destroy(); chartCompleted = null; }
+  if (chartCumulative) { chartCumulative.destroy(); chartCumulative = null; }
+  if (chartDlPerf5Day) { chartDlPerf5Day.destroy(); chartDlPerf5Day = null; }
+  if (chartDlPerfMonthly) { chartDlPerfMonthly.destroy(); chartDlPerfMonthly = null; }
+  renderCharts();
+}
+
+// ─── Excel import / export ────────────────────────────────────
+function importExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const months = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11 };
+  function parseAnyDate(raw) {
+    if (raw === null || raw === undefined || raw === '') return '';
+    if (raw instanceof Date) return isNaN(raw) ? '' : raw.toISOString();
+    const s = String(raw).trim();
+    if (!s) return '';
+    const d1 = new Date(s);
+    if (!isNaN(d1)) return d1.toISOString();
+    const m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4}),?\s+(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+    if (m) {
+      const mon = months[m[2].toLowerCase().slice(0,3)];
+      if (mon !== undefined) {
+        let hour = parseInt(m[4], 10);
+        const min = parseInt(m[5], 10);
+        const ampm = (m[6] || '').toLowerCase();
+        if (ampm === 'pm' && hour < 12) hour += 12;
+        if (ampm === 'am' && hour === 12) hour = 0;
+        const d2 = new Date(parseInt(m[3], 10), mon, parseInt(m[1], 10), hour, min);
+        if (!isNaN(d2)) return d2.toISOString();
+      }
+    }
+    const m2 = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
+    if (m2) {
+      const mon = months[m2[2].toLowerCase().slice(0,3)];
+      if (mon !== undefined) {
+        const d3 = new Date(parseInt(m2[3], 10), mon, parseInt(m2[1], 10));
+        if (!isNaN(d3)) return d3.toISOString();
+      }
+    }
+    return '';
+  }
+  function parseDisplayDate(raw) {
+    if (raw === null || raw === undefined) return '';
+    if (raw instanceof Date) return isNaN(raw) ? '' : raw.toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    return String(raw).trim();
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      if (wb.SheetNames.indexOf('Modules') !== -1) {
+        const mSheet = XLSX.utils.sheet_to_json(wb.Sheets['Modules']);
+        const importedMods = mSheet.map(function(r) {
+          return { name: String(r['Module Name'] || r['name'] || '').trim(), icon: String(r['Icon'] || r['icon'] || '📌').trim(), color: String(r['Color'] || r['color'] || '#e0e0e0').trim() };
+        }).filter(function(m) { return m.name; });
+        if (importedMods.length) modules = importedMods;
+      }
+      const sheetName = wb.SheetNames.indexOf('Tasks') !== -1 ? 'Tasks' : wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      if (!rows.length) { toast('⚠ No task rows found', true); return; }
+      let imported = 0, skipped = 0;
+      const sortedRows = rows.slice().sort(function(a, b) {
+        const ida = parseInt(a['ID'] || a['id'] || 0);
+        const idb = parseInt(b['ID'] || b['id'] || 0);
+        return idb - ida;
+      });
+      for (let i = 0; i < sortedRows.length; i++) {
+        const r = sortedRows[i];
+        const taskText = String(r['Task'] || r['task'] || '').trim();
+        if (!taskText) { skipped++; continue; }
+        const moduleName = String(r['Module'] || r['module'] || 'General').trim();
+        if (moduleName && !modules.find(function(m) { return m.name === moduleName; })) {
+          modules.push({ name: moduleName, icon: '📌', color: COLORS[modules.length % COLORS.length] });
+        }
+        let completedVal = '';
+        const rawComp = r['Completed'] || r['completed'];
+        if (rawComp) {
+          if (rawComp instanceof Date) completedVal = isNaN(rawComp) ? '' : rawComp.toISOString();
+          else {
+            const s = String(rawComp).trim();
+            if (/^\d{4}-\d{2}-\d{2}T/.test(s)) completedVal = s;
+            else completedVal = parseAnyDate(s) || s;
+          }
+        }
+        const t = {
+          id: nextId++,
+          module: moduleName,
+          task: taskText,
+          priority: String(r['Priority'] || r['priority'] || 'Medium').trim(),
+          status: String(r['Status'] || r['status'] || 'Pending').trim(),
+          deadline: parseAnyDate(r['Deadline'] || r['deadline']),
+          created: parseDisplayDate(r['Created'] || r['created']) || ts(),
+          completed: completedVal
+        };
+        tasks.unshift(t);
+        imported++;
+      }
+      renderAll();
+      schedulePush();
+      toast('✓ Imported ' + imported + ' task' + (imported !== 1 ? 's' : '') + (skipped ? ' (' + skipped + ' skipped)' : ''));
+    } catch(err) {
+      console.error(err);
+      toast('⚠ Failed to read Excel file', true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
+}
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  const fmtDeadline = function(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }); };
+  const taskRows = tasks.map(function(t) { return { ID: t.id, Module: t.module, Task: t.task, Priority: t.priority, Status: t.status, Deadline: fmtDeadline(t.deadline), Created: t.created, Completed: t.completed }; });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taskRows), 'Tasks');
+  const modRows = modules.map(function(m) { return { 'Module Name': m.name, Color: m.color, Icon: m.icon, 'Total Tasks': tasks.filter(function(t) { return t.module === m.name; }).length, Completed: tasks.filter(function(t) { return t.module === m.name && t.status === 'Done'; }).length, '% Done': getModulePct(m.name) }; });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modRows), 'Modules');
+  const total = tasks.length, done = tasks.filter(function(t) { return t.status === 'Done'; }).length;
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ Metric: 'Total Tasks', Value: total }, { Metric: 'Completed', Value: done }, { Metric: 'Remaining', Value: total - done }, { Metric: '% Complete', Value: total ? Math.round(done/total*100) + '%' : '0%' }]), 'Summary');
+  XLSX.writeFile(wb, 'taskflow.xlsx');
+  toast('📊 Exported as taskflow.xlsx!');
+}
+
+// ─── Sound ────────────────────────────────────────────────────
+function playCompleteSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99];
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.18, ctx.currentTime);
+    masterGain.connect(ctx.destination);
+    notes.forEach(function(freq, i) {
+      const startTime = ctx.currentTime + i * 0.18;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, startTime);
+      env.gain.linearRampToValueAtTime(1, startTime + 0.01);
+      env.gain.exponentialRampToValueAtTime(0.001, startTime + 1.2);
+      osc.connect(env); env.connect(masterGain);
+      osc.start(startTime); osc.stop(startTime + 1.3);
+    });
+    setTimeout(function() { ctx.close(); }, 2200);
+  } catch (e) {}
+}
+
+// ─── Focus Timer ──────────────────────────────────────────────
+const FOCUS_RING_CIRCUMFERENCE = 2 * Math.PI * 62;
+let focusWorkMins = 25, focusBreakMins = 5, focusMode = 'work', focusSecondsLeft = 25 * 60, focusRunning = false, focusInterval = null;
+function focusTodayKey() { return 'taskflow_focus_' + new Date().toISOString().slice(0, 10); }
+function focusLoadSessionCount() { return parseInt(localStorage.getItem(focusTodayKey()) || '0', 10); }
+function focusBumpSessionCount() {
+  const n = focusLoadSessionCount() + 1;
+  localStorage.setItem(focusTodayKey(), String(n));
+  const el = document.getElementById('focus-session-count');
+  if (el) { el.textContent = n; el.className = 'perf-score positive'; }
+}
+function initFocusTimer() {
+  const countEl = document.getElementById('focus-session-count');
+  if (countEl) countEl.textContent = focusLoadSessionCount();
+  document.querySelectorAll('.focus-preset').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (focusRunning) return;
+      document.querySelectorAll('.focus-preset').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      focusWorkMins = parseInt(btn.dataset.work, 10);
+      focusBreakMins = parseInt(btn.dataset.break, 10);
+      focusMode = 'work';
+      focusSecondsLeft = focusWorkMins * 60;
+      focusRenderTimer();
+    });
+  });
+  focusRenderTimer();
+}
+function focusFormatTime(s) { const m = Math.floor(s / 60); const ss = s % 60; return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0'); }
+function focusRenderTimer() {
+  const timeEl = document.getElementById('focus-time');
+  const modeEl = document.getElementById('focus-mode-label');
+  const ringEl = document.getElementById('focus-ring-progress');
+  const subEl = document.getElementById('focus-sub');
+  if (!timeEl || !ringEl) return;
+  timeEl.textContent = focusFormatTime(focusSecondsLeft);
+  modeEl.textContent = focusMode === 'work' ? 'Focus' : 'Break';
+  ringEl.classList.toggle('on-break', focusMode === 'break');
+  const totalSeconds = (focusMode === 'work' ? focusWorkMins : focusBreakMins) * 60;
+  const fraction = totalSeconds > 0 ? focusSecondsLeft / totalSeconds : 0;
+  ringEl.style.strokeDasharray = FOCUS_RING_CIRCUMFERENCE;
+  ringEl.style.strokeDashoffset = FOCUS_RING_CIRCUMFERENCE * (1 - fraction);
+  if (subEl) subEl.textContent = focusMode === 'work' ? 'Just this one block — the rest can wait.' : 'Step away for a bit. Stretch, water, stare out a window.';
+}
+function focusTimerToggle() { focusRunning ? focusTimerPause() : focusTimerStart(); }
+function focusTimerStart() {
+  if (focusRunning) return;
+  focusRunning = true;
+  const btn = document.getElementById('focus-start-btn');
+  if (btn) { btn.textContent = 'Pause'; btn.classList.add('is-running'); }
+  focusInterval = setInterval(function() {
+    focusSecondsLeft--;
+    if (focusSecondsLeft <= 0) { focusTimerAdvancePhase(); return; }
+    focusRenderTimer();
+  }, 1000);
+}
+function focusTimerPause() {
+  focusRunning = false;
+  clearInterval(focusInterval); focusInterval = null;
+  const btn = document.getElementById('focus-start-btn');
+  if (btn) { btn.textContent = 'Resume'; btn.classList.remove('is-running'); }
+}
+function focusTimerReset() {
+  focusTimerPause();
+  focusMode = 'work';
+  focusSecondsLeft = focusWorkMins * 60;
+  const btn = document.getElementById('focus-start-btn');
+  if (btn) { btn.textContent = 'Start'; btn.classList.remove('is-running'); }
+  focusRenderTimer();
+}
+function focusTimerSkip() {
+  if (focusMode === 'work') { focusTimerAdvancePhase(); }
+  else {
+    focusTimerPause();
+    focusMode = 'work';
+    focusSecondsLeft = focusWorkMins * 60;
+    const btn = document.getElementById('focus-start-btn');
+    if (btn) { btn.textContent = 'Start'; btn.classList.remove('is-running'); }
+    focusRenderTimer();
+  }
+}
+function focusTimerAdvancePhase() {
+  focusTimerPause();
+  if (focusMode === 'work') {
+    focusBumpSessionCount();
+    focusMode = 'break';
+    focusSecondsLeft = focusBreakMins * 60;
+    toast('🎯 Nice work — break time.');
+  } else {
+    focusMode = 'work';
+    focusSecondsLeft = focusWorkMins * 60;
+    toast('Break\u2019s over — ready when you are.');
+  }
+  const btn = document.getElementById('focus-start-btn');
+  if (btn) { btn.textContent = 'Start'; btn.classList.remove('is-running'); }
+  focusRenderTimer();
+}
+
+// ─── Boot on load ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('task-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') addTask(); });
+  document.getElementById('mod-name-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') addModule(); });
+  document.getElementById('modal').addEventListener('click', function(e) { if (e.target === e.currentTarget) closeModal(); });
+  initFocusTimer();
+  boot();
+});
+</script>
+</body>
+</html>
