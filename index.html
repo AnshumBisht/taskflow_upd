@@ -16,6 +16,23 @@
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh;overflow-x:hidden}
 .app{position:relative;z-index:1;display:flex;min-height:100vh}
+.login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px}
+.login-screen.hidden{display:none}
+.login-box{background:var(--s1);border:1px solid var(--border2);border-radius:18px;padding:40px 36px;width:400px;max-width:100%;text-align:center}
+.login-logo{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;letter-spacing:-1px;margin-bottom:6px}
+.login-logo span{color:var(--accent-l)}
+.login-sub{color:var(--muted);font-size:13px;margin-bottom:28px;font-family:'JetBrains Mono',monospace}
+.login-label{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:8px}
+.login-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:12px 16px;font-family:'Outfit',sans-serif;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:14px}
+.login-input:focus{border-color:var(--accent-l)}
+.login-btn{width:100%;background:var(--accent-l);color:#000;border:none;border-radius:9px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.login-btn:hover{background:#fff}
+.login-btn:disabled{opacity:.5;cursor:wait}
+.login-msg{margin-top:16px;font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--muted2);min-height:20px}
+.login-msg.ok{color:#5aab7a}
+.login-msg.err{color:var(--red)}
+.btn-logout{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:8px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;width:100%;transition:all .2s}
+.btn-logout:hover{border-color:var(--red);color:var(--red)}
 .sidebar{width:280px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:28px 0 20px;position:sticky;top:0;height:100vh;overflow-y:auto}
 .logo{padding:0 24px 28px;border-bottom:1px solid var(--border);margin-bottom:20px}
 .logo-text{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px}
@@ -261,6 +278,19 @@ input:focus,select:focus{border-color:var(--accent)}
 </head>
 <body>
 
+<div class="login-screen hidden" id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">Task<span>Flow</span></div>
+    <div class="login-sub">Sign in to sync across devices</div>
+    <div class="login-label">Email</div>
+    <input type="email" class="login-input" id="login-email" placeholder="you@example.com" autocomplete="email" />
+    <div class="login-label">Password</div>
+    <input type="password" class="login-input" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In →</button>
+    <div class="login-msg" id="login-msg"></div>
+  </div>
+</div>
+
 <div class="app">
 <aside class="sidebar">
   <div class="logo">
@@ -280,6 +310,7 @@ input:focus,select:focus{border-color:var(--accent)}
     <button class="btn-excel btn-import" onclick="document.getElementById('file-input').click()">📥 Import Excel</button>
     <button class="btn-excel btn-export" onclick="exportExcel()">📊 Export to Excel</button>
     <button class="btn-excel" style="background:rgba(90,171,122,.1);border-color:rgba(90,171,122,.3);color:#5aab7a" onclick="forceSyncNow()">🔄 Sync Now</button>
+    <button class="btn-logout" onclick="doLogout()">⏻ Log out</button>
     <div class="sync-status" id="sync-status"><span class="dot"></span><span id="sync-text">Connecting…</span></div>
   </div>
 </aside>
@@ -495,7 +526,41 @@ function setSyncStatus(state, text) {
   document.getElementById('sync-text').textContent = text;
 }
 
-// ─── Boot: Firebase init + anonymous auth ────────────────────
+// ─── Login screen ─────────────────────────────────────────────
+function showLoginScreen() {
+  document.getElementById('login-screen').classList.remove('hidden');
+}
+function hideLoginScreen() {
+  document.getElementById('login-screen').classList.add('hidden');
+}
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const msg = document.getElementById('login-msg');
+  if (!email) { msg.textContent = '⚠ Enter your email'; msg.className = 'login-msg err'; return; }
+  if (!password) { msg.textContent = '⚠ Enter your password'; msg.className = 'login-msg err'; return; }
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  msg.textContent = ''; msg.className = 'login-msg';
+  try {
+    await fbAuth.signInWithEmailAndPassword(email, password);
+    msg.textContent = '✓ Signed in!';
+    msg.className = 'login-msg ok';
+  } catch (e) {
+    console.error(e);
+    msg.textContent = '⚠ ' + (e.message || 'Login failed');
+    msg.className = 'login-msg err';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In →';
+  }
+}
+async function doLogout() {
+  if (!confirm('Log out? Your data will stay synced on the cloud.')) return;
+  await fbAuth.signOut();
+  location.reload();
+}
+
+// ─── Boot: Firebase init + auth state ─────────────────────────
 async function boot() {
   setSyncStatus('syncing', 'Connecting…');
   try {
@@ -503,22 +568,33 @@ async function boot() {
     fbDb = firebase.firestore();
     fbAuth = firebase.auth();
 
-    const cred = await fbAuth.signInAnonymously();
-    currentUser = cred.user;
-    console.log('[TaskFlow] Signed in:', currentUser.uid);
+    fbAuth.onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUser = user;
+        console.log('[TaskFlow] Signed in:', user.uid);
+        hideLoginScreen();
+        await fullSync();
+        renderAll();
+        setSyncStatus('online', 'Synced');
 
-    await fullSync();
-    renderAll();
-    setSyncStatus('online', 'Synced');
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(() => {
+          if (!syncing && isOnline && currentUser) pullFromCloud().catch(() => {});
+        }, 15000);
 
-    pollTimer = setInterval(() => {
-      if (!syncing && isOnline && currentUser) pullFromCloud().catch(() => {});
-    }, 15000);
-
-    setInterval(() => {
-      if (localDirty && !syncing && isOnline) pushToCloud().catch(() => {});
-    }, 8000);
-
+        // periodic retry for pending local changes
+        if (!window.__taskflowRetryTimer) {
+          window.__taskflowRetryTimer = setInterval(() => {
+            if (localDirty && !syncing && isOnline && currentUser) {
+              pushToCloud().catch(() => {});
+            }
+          }, 8000);
+        }
+      } else {
+        currentUser = null;
+        showLoginScreen();
+      }
+    });
   } catch (e) {
     console.error('[TaskFlow] Boot failed:', e);
     setSyncStatus('offline', 'Auth failed');
@@ -527,14 +603,14 @@ async function boot() {
 }
 
 // ─── Cloud helpers ────────────────────────────────────────────
-const DOC_REF = () => fbDb.collection('taskflow').doc('main');
-
+const DOC_REF = () => fbDb.collection('taskflow').doc(currentUser.uid);
 async function readCloud() {
+  if (!currentUser) return null;
   const snap = await DOC_REF().get();
   return snap.exists ? snap.data() : null;
 }
-
 async function writeCloud(payload) {
+  if (!currentUser) return;
   await DOC_REF().set(payload);
 }
 
@@ -543,9 +619,9 @@ function mergeData(local, cloud) {
   if (!cloud) return local;
   if (!local) return cloud;
   return {
-    tasks:           mergeArrays(local.tasks || [],           cloud.tasks || [],           'id'),
-    modules:         mergeModules(local.modules || [],         cloud.modules || []),
-    deadlineEvents:  mergeArrays(local.deadlineEvents || [],  cloud.deadlineEvents || [],  'uid'),
+    tasks:           mergeArrays(local.tasks || [],          cloud.tasks || [],          'id'),
+    modules:         mergeModules(local.modules || [],        cloud.modules || []),
+    deadlineEvents:  mergeArrays(local.deadlineEvents || [], cloud.deadlineEvents || [], 'uid'),
     _ts:             Math.max(local._ts || 0, cloud._ts || 0)
   };
 }
@@ -1385,6 +1461,8 @@ function focusTimerAdvancePhase() {
 
 // ─── Boot on load ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('login-email').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+  document.getElementById('login-password').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
   document.getElementById('task-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') addTask(); });
   document.getElementById('mod-name-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') addModule(); });
   document.getElementById('modal').addEventListener('click', function(e) { if (e.target === e.currentTarget) closeModal(); });
