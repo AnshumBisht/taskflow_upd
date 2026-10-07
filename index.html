@@ -653,7 +653,7 @@ async function pushToCloud() {
   localDirty = false;
 }
 async function pullFromCloud() {
-  if (!currentUser || !isOnline) return false;
+  if (!currentUser || !isOnline || localDirty) return false;
   const cloud = await readCloud();
   if (!cloud) return false;
   const cloudTs = cloud._ts || 0;
@@ -673,12 +673,30 @@ async function pullFromCloud() {
   return false;
 }
 async function fullSync() {
+  let initialPullDone = false;
+async function fullSync() {
   if (!currentUser || !isOnline || syncing) return;
   syncing = true;
   setSyncStatus('syncing', 'Syncing…');
   try {
+    if (!initialPullDone) {
+      const cloud = await readCloud();
+      if (cloud) {
+        const merged = mergeData({ tasks, modules, deadlineEvents, _ts: 0 }, cloud);
+        tasks = merged.tasks;
+        modules = merged.modules;
+        deadlineEvents = merged.deadlineEvents;
+        lastCloudTs = cloud._ts || 0;
+      }
+      initialPullDone = true;
+      const maxId = tasks.reduce((mx, t) => Math.max(mx, t.id || 0), 0);
+      nextId = Math.max(nextId, maxId + 1);
+      renderAll();
+    }
     await pushToCloud();
     await pullFromCloud();
+    const maxId2 = tasks.reduce((mx, t) => Math.max(mx, t.id || 0), 0);
+    nextId = Math.max(nextId, maxId2 + 1);
     setSyncStatus('online', 'Synced');
   } catch (e) {
     console.error('[TaskFlow] Sync error:', e);
@@ -686,6 +704,7 @@ async function fullSync() {
   } finally {
     syncing = false;
   }
+}
 }
 function schedulePush() {
   if (!currentUser || !isOnline) return;
