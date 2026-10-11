@@ -274,20 +274,26 @@ input:focus,select:focus{border-color:var(--accent)}
 .sync-status.online .dot{background:#5aab7a}
 .sync-status.syncing .dot{background:#e0a952;animation:pulse 1s infinite}
 .sync-status.offline .dot{background:var(--red)}
-.modlist-section{margin-bottom:24px}
-.modlist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-.ml-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
-.ml-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--ml-color,var(--border2))}
-.ml-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.modlist-section{margin-top:14px}
+.ml-block{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px}
+.ml-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
 .ml-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
-.ml-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px dashed var(--border)}
-.ml-row:first-of-type{border-top:none}
-.ml-task{font-size:13px;line-height:1.4;min-width:0;word-break:break-word}
-.ml-row.done .ml-task{text-decoration:line-through;color:var(--muted)}
-.ml-row.over .ml-task{color:var(--red)}
-.ml-when{flex-shrink:0;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted2);line-height:1.5}
-.ml-row.over .ml-when{color:var(--red)}
+.ml-nav{display:flex;align-items:center;gap:8px}
+.ml-pageinfo{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted2)}
+.ml-btn{background:var(--s2);border:1px solid var(--border2);color:var(--text);border-radius:8px;width:30px;height:28px;cursor:pointer;font-size:14px;line-height:1;transition:all .2s}
+.ml-btn:hover:not(:disabled){border-color:var(--accent-l);background:var(--s3)}
+.ml-btn:disabled{opacity:.3;cursor:default}
+.ml-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.ml-item{background:var(--s2);border:1px solid var(--border);border-top:2px solid var(--ml-color,var(--border2));border-radius:10px;padding:10px 12px;min-width:0}
+.ml-task{font-size:12.5px;line-height:1.4;margin-bottom:8px;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ml-item.done .ml-task{text-decoration:line-through;color:var(--muted)}
+.ml-item.over{border-color:rgba(224,82,82,.35);border-top-color:var(--red)}
+.ml-item.over .ml-task{color:var(--red)}
+.ml-when{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2);line-height:1.6}
+.ml-item.over .ml-when{color:var(--red)}
 .ml-empty{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px}
+@media (max-width:1200px){.ml-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.ml-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -353,13 +359,6 @@ input:focus,select:focus{border-color:var(--accent)}
     <div class="sticky-wall" id="sticky-wall"></div>
   </div>
 
-  <div class="modlist-section">
-    <div class="deadline-board-header">
-      <div class="deadline-board-title">🗂 Deadlines by Module <span class="deadline-board-count" id="modlist-count">0</span></div>
-    </div>
-    <div class="modlist-grid" id="modlist-grid"></div>
-  </div>
-
   <div class="charts-section">
     <div class="charts-header">
       <div class="charts-title">📈 Progress Charts</div>
@@ -401,6 +400,13 @@ input:focus,select:focus{border-color:var(--accent)}
           <div class="perf-score zero" id="perf-score-monthly">0</div></div>
       </div>
       <div class="chart-wrap-tall"><canvas id="chart-dl-perf-monthly"></canvas></div>
+    </div>
+
+    <div class="modlist-section">
+      <div class="deadline-board-header">
+        <div class="deadline-board-title">🗂 Deadlines by Module <span class="deadline-board-count" id="modlist-count">0</span></div>
+      </div>
+      <div id="modlist-grid"></div>
     </div>
 
     <div class="chart-card-full focus-card" style="margin-top:14px">
@@ -927,14 +933,22 @@ function renderAll() {
   renderStickyNotes(); renderModuleDeadlines(); renderTaskList(); updateHeader(); renderCharts();
   startTimers();
 }
+const ML_PER_PAGE = 6;
+const mlPages = {};
+function mlNav(i, d) {
+  const m = modules[i];
+  if (!m) return;
+  mlPages[m.name] = (mlPages[m.name] || 0) + d;
+  renderModuleDeadlines();
+}
 function renderModuleDeadlines() {
   const grid = document.getElementById('modlist-grid');
   const countEl = document.getElementById('modlist-count');
   if (!grid) return;
   const now = Date.now();
-  const mods = activeModule === '__all__' ? modules : modules.filter(m => m.name === activeModule);
   let pendingTotal = 0;
-  const html = mods.map(m => {
+  const html = modules.map((m, idx) => {
+    if (activeModule !== '__all__' && m.name !== activeModule) return '';
     const list = tasks
       .filter(t => t.module === m.name && t.deadline && !isNaN(new Date(t.deadline)))
       .sort((a, b) => {
@@ -945,19 +959,28 @@ function renderModuleDeadlines() {
     if (!list.length) return '';
     const pending = list.filter(t => t.status !== 'Done').length;
     pendingTotal += pending;
-    const rows = list.map(t => {
+    const pages = Math.ceil(list.length / ML_PER_PAGE);
+    const page = Math.min(Math.max(mlPages[m.name] || 0, 0), pages - 1);
+    mlPages[m.name] = page;
+    const items = list.slice(page * ML_PER_PAGE, (page + 1) * ML_PER_PAGE).map(t => {
       const dl = new Date(t.deadline);
       const done = t.status === 'Done';
       const over = !done && dl.getTime() < now;
       const date = dl.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
       const time = dl.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-      return '<div class="ml-row ' + (done ? 'done' : '') + ' ' + (over ? 'over' : '') + '">' +
+      return '<div class="ml-item ' + (done ? 'done' : '') + ' ' + (over ? 'over' : '') + '">' +
         '<div class="ml-task">' + (done ? '✓ ' : '') + esc(t.task) + '</div>' +
         '<div class="ml-when">📅 ' + date + '<br>⏰ ' + time + (over ? '<br>⚠ OVERDUE' : '') + '</div></div>';
     }).join('');
-    return '<div class="ml-card" style="--ml-color:' + m.color + '">' +
-      '<div class="ml-head"><div class="ml-title"><span>' + m.icon + '</span><span>' + esc(m.name) + '</span></div>' +
-      '<span class="deadline-board-count">' + pending + ' pending</span></div>' + rows + '</div>';
+    const nav = pages > 1
+      ? '<div class="ml-nav"><button class="ml-btn" onclick="mlNav(' + idx + ',-1)" ' + (page === 0 ? 'disabled' : '') + ' title="Previous 6">‹</button>' +
+        '<span class="ml-pageinfo">' + (page + 1) + ' / ' + pages + '</span>' +
+        '<button class="ml-btn" onclick="mlNav(' + idx + ',1)" ' + (page >= pages - 1 ? 'disabled' : '') + ' title="Next 6">›</button></div>'
+      : '';
+    return '<div class="ml-block" style="--ml-color:' + m.color + '">' +
+      '<div class="ml-head"><div class="ml-title"><span>' + m.icon + '</span><span>' + esc(m.name) + '</span>' +
+      '<span class="deadline-board-count">' + pending + ' pending</span></div>' + nav + '</div>' +
+      '<div class="ml-strip">' + items + '</div></div>';
   }).join('');
   countEl.textContent = pendingTotal;
   grid.innerHTML = html || '<div class="ml-empty">No tasks with deadlines yet ⏰</div>';
