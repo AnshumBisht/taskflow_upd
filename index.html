@@ -274,6 +274,20 @@ input:focus,select:focus{border-color:var(--accent)}
 .sync-status.online .dot{background:#5aab7a}
 .sync-status.syncing .dot{background:#e0a952;animation:pulse 1s infinite}
 .sync-status.offline .dot{background:var(--red)}
+.modlist-section{margin-bottom:24px}
+.modlist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.ml-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.ml-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--ml-color,var(--border2))}
+.ml-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.ml-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.ml-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px dashed var(--border)}
+.ml-row:first-of-type{border-top:none}
+.ml-task{font-size:13px;line-height:1.4;min-width:0;word-break:break-word}
+.ml-row.done .ml-task{text-decoration:line-through;color:var(--muted)}
+.ml-row.over .ml-task{color:var(--red)}
+.ml-when{flex-shrink:0;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted2);line-height:1.5}
+.ml-row.over .ml-when{color:var(--red)}
+.ml-empty{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px}
 </style>
 </head>
 <body>
@@ -337,6 +351,13 @@ input:focus,select:focus{border-color:var(--accent)}
   <div class="sticky-section">
     <div class="deadline-board-header"><div class="deadline-board-title">📌 Due Today <span class="deadline-board-count" id="sticky-count">0</span></div></div>
     <div class="sticky-wall" id="sticky-wall"></div>
+  </div>
+
+  <div class="modlist-section">
+    <div class="deadline-board-header">
+      <div class="deadline-board-title">🗂 Deadlines by Module <span class="deadline-board-count" id="modlist-count">0</span></div>
+    </div>
+    <div class="modlist-grid" id="modlist-grid"></div>
   </div>
 
   <div class="charts-section">
@@ -796,7 +817,7 @@ function completeTask(id) {
     recordDeadlineEvent(t, type, type === 'hit' ? comp : dl);
   }
   renderStats(); renderSidebar(); renderModuleGrid();
-  renderDeadlineBoard(); renderStickyNotes(); renderTaskList();
+  renderDeadlineBoard(); renderStickyNotes(); renderModuleDeadlines(); renderTaskList();
   startTimers(); renderCharts(true);
   schedulePush();
   playCompleteSound();
@@ -832,7 +853,7 @@ function setDeadline(id, value) {
   const t = tasks.find(x => x.id === id);
   if (!t) return;
   t.deadline = value ? new Date(value).toISOString() : '';
-  renderDeadlineBoard(); renderStickyNotes(); renderTaskList(); startTimers();
+  renderDeadlineBoard(); renderStickyNotes(); renderModuleDeadlines(); renderTaskList(); startTimers();
   schedulePush();
   toast(value ? '⏰ Deadline set!' : 'Deadline cleared');
 }
@@ -840,7 +861,7 @@ function clearDeadline(id) {
   const t = tasks.find(x => x.id === id);
   if (!t) return;
   t.deadline = '';
-  renderDeadlineBoard(); renderStickyNotes(); renderTaskList();
+  renderDeadlineBoard(); renderStickyNotes(); renderModuleDeadlines(); renderTaskList();
   schedulePush();
   toast('Deadline cleared');
 }
@@ -903,9 +924,45 @@ function updateTimers() {
 function renderAll() {
   renderSidebar(); renderModuleGrid(); renderModuleSelect();
   renderModChips(); renderStats(); renderDeadlineBoard();
-  renderStickyNotes(); renderTaskList(); updateHeader(); renderCharts();
+  renderStickyNotes(); renderModuleDeadlines(); renderTaskList(); updateHeader(); renderCharts();
   startTimers();
 }
+function renderModuleDeadlines() {
+  const grid = document.getElementById('modlist-grid');
+  const countEl = document.getElementById('modlist-count');
+  if (!grid) return;
+  const now = Date.now();
+  const mods = activeModule === '__all__' ? modules : modules.filter(m => m.name === activeModule);
+  let pendingTotal = 0;
+  const html = mods.map(m => {
+    const list = tasks
+      .filter(t => t.module === m.name && t.deadline && !isNaN(new Date(t.deadline)))
+      .sort((a, b) => {
+        const ad = a.status === 'Done', bd = b.status === 'Done';
+        if (ad !== bd) return ad ? 1 : -1;
+        return new Date(a.deadline) - new Date(b.deadline);
+      });
+    if (!list.length) return '';
+    const pending = list.filter(t => t.status !== 'Done').length;
+    pendingTotal += pending;
+    const rows = list.map(t => {
+      const dl = new Date(t.deadline);
+      const done = t.status === 'Done';
+      const over = !done && dl.getTime() < now;
+      const date = dl.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const time = dl.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+      return '<div class="ml-row ' + (done ? 'done' : '') + ' ' + (over ? 'over' : '') + '">' +
+        '<div class="ml-task">' + (done ? '✓ ' : '') + esc(t.task) + '</div>' +
+        '<div class="ml-when">📅 ' + date + '<br>⏰ ' + time + (over ? '<br>⚠ OVERDUE' : '') + '</div></div>';
+    }).join('');
+    return '<div class="ml-card" style="--ml-color:' + m.color + '">' +
+      '<div class="ml-head"><div class="ml-title"><span>' + m.icon + '</span><span>' + esc(m.name) + '</span></div>' +
+      '<span class="deadline-board-count">' + pending + ' pending</span></div>' + rows + '</div>';
+  }).join('');
+  countEl.textContent = pendingTotal;
+  grid.innerHTML = html || '<div class="ml-empty">No tasks with deadlines yet ⏰</div>';
+}
+setInterval(renderModuleDeadlines, 60000);
 function renderSidebar() {
   const container = document.getElementById('sidebar-modules');
   document.getElementById('all-btn').className = 'all-btn' + (activeModule === '__all__' ? ' active' : '');
