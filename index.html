@@ -180,6 +180,9 @@ input:focus,select:focus{border-color:var(--accent)}
 .dl-input-inline{background:var(--s2);border:1px solid var(--border);border-radius:7px;color:var(--muted2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 10px;cursor:pointer;transition:border-color .2s,color .2s;outline:none;color-scheme:dark;min-width:0}
 .dl-input-inline:hover{border-color:var(--border2);color:var(--text)}
 .dl-input-inline:focus{border-color:var(--accent-l);color:var(--text)}
+.rp-select{background:var(--s2);border:1px solid var(--border);border-radius:7px;color:var(--muted2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 8px;min-width:0;cursor:pointer;outline:none;color-scheme:dark}
+.rp-select:hover,.rp-select:focus{border-color:var(--border2);color:var(--text)}
+.tag-repeat{background:rgba(90,171,122,.18);color:#5aab7a}
 .dl-label-icon{font-size:13px;color:var(--muted);flex-shrink:0;line-height:1}
 .dl-clear{background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:10px;padding:3px 8px;border-radius:6px;transition:all .2s;font-family:'JetBrains Mono',monospace;flex-shrink:0}
 .dl-clear:hover{color:var(--red);border-color:var(--red);background:rgba(224,82,82,.1)}
@@ -476,6 +479,12 @@ input:focus,select:focus{border-color:var(--accent)}
         <option value="Low">🟢 Low</option>
       </select>
       <input type="datetime-local" id="deadline-input" class="dl-input-form" title="Set deadline (optional)" />
+      <select id="repeat-select" title="Repeat deadline (needs a deadline)">
+        <option value="">🔁 No repeat</option>
+        <option value="daily">🔁 Daily</option>
+        <option value="weekly">🔁 Weekly</option>
+        <option value="monthly">🔁 Monthly</option>
+      </select>
       <button class="btn-add" onclick="addTask()">ADD →</button>
     </div>
   </div>
@@ -805,10 +814,13 @@ function addTask() {
   if (!text) { toast('⚠ Type a task first!', true); return; }
   if (!mod) { toast('⚠ Select a module first!', true); return; }
   const dlRaw = document.getElementById('deadline-input').value;
-  const t = { id: nextId++, module: mod, task: text, priority: pri, status: 'Pending', created: ts(), completed: '', deadline: dlRaw ? new Date(dlRaw).toISOString() : '' };
+  const repeatVal = document.getElementById('repeat-select').value;
+  if (repeatVal && !dlRaw) { toast('⚠ Set a deadline to use repeat', true); return; }
+  const t = { id: nextId++, module: mod, task: text, priority: pri, status: 'Pending', created: ts(), completed: '', deadline: dlRaw ? new Date(dlRaw).toISOString() : '', repeat: dlRaw ? repeatVal : '' };
   tasks.unshift(t);
   input.value = '';
   document.getElementById('deadline-input').value = '';
+  document.getElementById('repeat-select').value = '';
   renderAll(); schedulePush(); toast('✓ Task added!');
 }
 function completeTask(id) {
@@ -821,6 +833,7 @@ function completeTask(id) {
     const dl = new Date(t.deadline);
     const type = comp <= dl ? 'hit' : 'miss';
     recordDeadlineEvent(t, type, type === 'hit' ? comp : dl);
+    spawnRepeatTask(t);
   }
   renderStats(); renderSidebar(); renderModuleGrid();
   renderDeadlineBoard(); renderStickyNotes(); renderModuleDeadlines(); renderTaskList();
@@ -828,6 +841,54 @@ function completeTask(id) {
   schedulePush();
   playCompleteSound();
   toast('🎉 Task completed!');
+}
+// ─── Repeat deadline ──────────────────────────────────────────
+const REPEAT_LABELS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+function normRepeat(v) {
+  const s = String(v || '').trim().toLowerCase();
+  return REPEAT_LABELS[s] ? s : '';
+}
+function nextRepeatDeadline(iso, repeat) {
+  const base = new Date(iso);
+  if (isNaN(base) || !REPEAT_LABELS[repeat]) return '';
+  const now = Date.now();
+  for (let k = 1; k < 5000; k++) {
+    const d = new Date(base);
+    if (repeat === 'daily') d.setDate(base.getDate() + k);
+    else if (repeat === 'weekly') d.setDate(base.getDate() + 7 * k);
+    else {
+      d.setDate(1);
+      d.setMonth(base.getMonth() + k);
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(base.getDate(), last));
+    }
+    if (d.getTime() > now) return d.toISOString();
+  }
+  return '';
+}
+function spawnRepeatTask(t) {
+  const rep = normRepeat(t.repeat);
+  if (!rep || !t.deadline) return;
+  const nd = nextRepeatDeadline(t.deadline, rep);
+  if (!nd) return;
+  tasks.unshift({ id: nextId++, module: t.module, task: t.task, priority: t.priority, status: 'Pending', created: ts(), completed: '', deadline: nd, repeat: rep });
+}
+function repeatSelectHtml(t) {
+  const cur = normRepeat(t.repeat);
+  return '<select class="rp-select" onchange="setRepeat('+t.id+', this.value)" title="Repeat deadline">'+
+    '<option value=""'+(cur===''?' selected':'')+'>🔁 No repeat</option>'+
+    '<option value="daily"'+(cur==='daily'?' selected':'')+'>🔁 Daily</option>'+
+    '<option value="weekly"'+(cur==='weekly'?' selected':'')+'>🔁 Weekly</option>'+
+    '<option value="monthly"'+(cur==='monthly'?' selected':'')+'>🔁 Monthly</option></select>';
+}
+function setRepeat(id, value) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  if (value && !t.deadline) { toast('⚠ Set a deadline first', true); renderTaskList(); return; }
+  t.repeat = normRepeat(value);
+  renderTaskList(); startTimers();
+  schedulePush();
+  toast(t.repeat ? '🔁 Repeats ' + t.repeat : 'Repeat removed');
 }
 function deleteTask(id) {
   tasks = tasks.filter(x => x.id !== id);
@@ -859,6 +920,7 @@ function setDeadline(id, value) {
   const t = tasks.find(x => x.id === id);
   if (!t) return;
   t.deadline = value ? new Date(value).toISOString() : '';
+  if (!value) t.repeat = '';
   renderDeadlineBoard(); renderStickyNotes(); renderModuleDeadlines(); renderTaskList(); startTimers();
   schedulePush();
   toast(value ? '⏰ Deadline set!' : 'Deadline cleared');
@@ -867,6 +929,7 @@ function clearDeadline(id) {
   const t = tasks.find(x => x.id === id);
   if (!t) return;
   t.deadline = '';
+  t.repeat = '';
   renderDeadlineBoard(); renderStickyNotes(); renderModuleDeadlines(); renderTaskList();
   schedulePush();
   toast('Deadline cleared');
@@ -1047,8 +1110,8 @@ function renderTaskList() {
     const isOverdue = hasDeadline && t.status !== 'Done' && new Date(t.deadline).getTime() < now;
     const dlValue = hasDeadline ? toLocalInputValue(t.deadline) : '';
     const timerHtml = hasDeadline && t.status !== 'Done' ? '<div class="timer-display" data-deadline="'+t.deadline+'" data-taskid="'+t.id+'"><span class="timer-wrap"><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">d</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">h</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">m</span></span><span class="timer-sep">:</span><span class="timer-block"><span class="timer-num">--</span><span class="timer-lbl">s</span></span></span></div>' : '';
-    const deadlineRow = t.status !== 'Done' ? '<div class="deadline-row">'+timerHtml+'<span class="dl-label-icon">⏰</span><input type="datetime-local" class="dl-input-inline" value="'+dlValue+'" onchange="setDeadline('+t.id+', this.value)" title="'+(hasDeadline ? 'Change deadline' : 'Set deadline')+'" />'+(hasDeadline ? '<button class="dl-clear" onclick="clearDeadline('+t.id+')" title="Clear deadline">✕</button>' : '')+'</div>' : '';
-    return '<div class="task-item '+(t.status==='Done'?'done':'')+' '+(isOverdue?'overdue':'')+'" id="ti-'+t.id+'"><div class="check-btn" onclick="completeTask('+t.id+')">'+(t.status==='Done'?'✓':'')+'</div><div class="task-body"><div class="task-txt '+(isOverdue?'overdue-text':'')+'" id="txt-'+t.id+'">'+esc(t.task)+'</div><div class="task-tags"><span class="tag tag-mod" style="background:'+modColor+'22;color:'+modColor+'">'+esc(t.module)+'</span><span class="tag '+priClass+'">'+priIcon+' '+t.priority+'</span>'+(t.status==='Done'?'<span class="tag tag-done">✓ Done</span>':'')+'<span class="task-date">'+t.created+'</span></div>'+deadlineRow+'</div><button class="del-btn" onclick="deleteTask('+t.id+')">✕</button></div>';
+    const deadlineRow = t.status !== 'Done' ? '<div class="deadline-row">'+timerHtml+'<span class="dl-label-icon">⏰</span><input type="datetime-local" class="dl-input-inline" value="'+dlValue+'" onchange="setDeadline('+t.id+', this.value)" title="'+(hasDeadline ? 'Change deadline' : 'Set deadline')+'" />'+(hasDeadline ? repeatSelectHtml(t) : '')+(hasDeadline ? '<button class="dl-clear" onclick="clearDeadline('+t.id+')" title="Clear deadline">✕</button>' : '')+'</div>' : '';
+    return '<div class="task-item '+(t.status==='Done'?'done':'')+' '+(isOverdue?'overdue':'')+'" id="ti-'+t.id+'"><div class="check-btn" onclick="completeTask('+t.id+')">'+(t.status==='Done'?'✓':'')+'</div><div class="task-body"><div class="task-txt '+(isOverdue?'overdue-text':'')+'" id="txt-'+t.id+'">'+esc(t.task)+'</div><div class="task-tags"><span class="tag tag-mod" style="background:'+modColor+'22;color:'+modColor+'">'+esc(t.module)+'</span><span class="tag '+priClass+'">'+priIcon+' '+t.priority+'</span>'+(t.status==='Done'?'<span class="tag tag-done">✓ Done</span>':'')+(normRepeat(t.repeat)?'<span class="tag tag-repeat">🔁 '+REPEAT_LABELS[normRepeat(t.repeat)]+'</span>':'')+'<span class="task-date">'+t.created+'</span></div>'+deadlineRow+'</div><button class="del-btn" onclick="deleteTask('+t.id+')">✕</button></div>';
   }).join('');
 }
 function updateHeader() {
@@ -1344,7 +1407,7 @@ function importExcel(event) {
             completedVal = /^\d{4}-\d{2}-\d{2}T/.test(s) ? s : (parseAnyDate(s) || s);
           }
         }
-        tasks.unshift({ id: nextId++, module: moduleName, task: taskText, priority: String(r['Priority'] || r['priority'] || 'Medium').trim(), status: String(r['Status'] || r['status'] || 'Pending').trim(), deadline: parseAnyDate(r['Deadline'] || r['deadline']), created: parseDisplayDate(r['Created'] || r['created']) || ts(), completed: completedVal });
+        tasks.unshift({ id: nextId++, module: moduleName, task: taskText, priority: String(r['Priority'] || r['priority'] || 'Medium').trim(), status: String(r['Status'] || r['status'] || 'Pending').trim(), deadline: parseAnyDate(r['Deadline'] || r['deadline']), repeat: parseAnyDate(r['Deadline'] || r['deadline']) ? normRepeat(r['Repeat'] || r['repeat']) : '', created: parseDisplayDate(r['Created'] || r['created']) || ts(), completed: completedVal });
         imported++;
       });
       renderAll(); schedulePush();
@@ -1357,7 +1420,7 @@ function importExcel(event) {
 function exportExcel() {
   const wb = XLSX.utils.book_new();
   const fmtDeadline = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }); };
-  const taskRows = tasks.map(t => ({ ID: t.id, Module: t.module, Task: t.task, Priority: t.priority, Status: t.status, Deadline: fmtDeadline(t.deadline), Created: t.created, Completed: t.completed }));
+  const taskRows = tasks.map(t => ({ ID: t.id, Module: t.module, Task: t.task, Priority: t.priority, Status: t.status, Deadline: fmtDeadline(t.deadline), Repeat: REPEAT_LABELS[normRepeat(t.repeat)] || '', Created: t.created, Completed: t.completed }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(taskRows), 'Tasks');
   const modRows = modules.map(m => ({ 'Module Name': m.name, Color: m.color, Icon: m.icon, 'Total Tasks': tasks.filter(t => t.module === m.name).length, Completed: tasks.filter(t => t.module === m.name && t.status === 'Done').length, '% Done': getModulePct(m.name) }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modRows), 'Modules');
