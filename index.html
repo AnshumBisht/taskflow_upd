@@ -591,8 +591,64 @@ async function doLogin() {
 }
 async function doLogout() {
   if (!confirm('Log out? Your data stays safe on the cloud.')) return;
+  if (localDirty && !confirm('Kuch badlav abhi cloud par save nahi hue. Phir bhi log out karein?')) return;
+  try { if (!localDirty) localStorage.removeItem(CACHE_KEY); } catch (e) {}
   await fbAuth.signOut();
   location.reload();
+}
+
+// ─── Sync state & helpers ─────────────────────────────────────
+const CACHE_KEY = 'taskflow_cache_v2';
+let initialPullDone = false;   // cloud ek baar padhe bina kabhi cloud par likhna nahi
+let localVersion = 0;          // har badlav par badhta hai
+let _idSeq = 0;
+let lastErrToast = 0;
+
+// Har task ko unique id (device ya reload badalne par bhi collide nahi hoti)
+function newId() { return Date.now() * 1000 + (_idSeq++ % 1000); }
+
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label || 'timed out')), ms);
+    promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
+// Agar dono tasks ki id same ho to doosre ko nayi id de do (task kabhi delete nahi hota)
+function dedupeIds(list) {
+  const seen = new Set();
+  let changed = false;
+  list.forEach(t => {
+    if (!t) return;
+    if (t.id == null || seen.has(t.id)) { t.id = newId(); changed = true; }
+    seen.add(t.id);
+  });
+  return changed;
+}
+
+// ─── Local copy (is device par backup) ────────────────────────
+function saveLocalCache() {
+  try {
+    if (!currentUser) return;
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      uid: currentUser.uid, tasks, modules, deadlineEvents,
+      dirty: localDirty, baseTs: lastCloudTs, savedAt: Date.now()
+    }));
+  } catch (e) { console.warn('[TaskFlow] Local cache save failed:', e); }
+}
+function loadLocalCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return;
+    const c = JSON.parse(raw);
+    if (!c || c.uid !== currentUser.uid) return;
+    tasks = c.tasks || [];
+    modules = c.modules || [];
+    deadlineEvents = c.deadlineEvents || [];
+    localDirty = !!c.dirty;
+    lastCloudTs = c.baseTs || 0;
+    if (dedupeIds(tasks)) { localDirty = true; localVersion++; }
+  } catch (e) { console.warn('[TaskFlow] Local cache load failed:', e); }
 }
 
 // ─── Boot ─────────────────────────────────────────────────────
@@ -608,20 +664,19 @@ async function boot() {
         currentUser = user;
         console.log('[TaskFlow] Signed in:', user.uid);
         hideLoginScreen();
-        await fullSync();
+        loadLocalCache();          // pehle is device ka data turant dikhao
         renderAll();
-        setSyncStatus('online', 'Synced');
+        await fullSync();          // phir cloud se milao
+        renderAll();
 
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
-          if (!syncing && isOnline && currentUser) pullFromCloud().catch(() => {});
+          if (!syncing && isOnline && currentUser && initialPullDone && !localDirty) pullFromCloud().catch(() => {});
         }, 15000);
 
         if (!window.__retryTimer) {
           window.__retryTimer = setInterval(() => {
-            if (localDirty && !syncing && isOnline && currentUser) {
-              pushToCloud().catch(() => {});
-            }
+            if ((localDirty || !initialPullDone) && !syncing && isOnline && currentUser) fullSync();
           }, 8000);
         }
       } else {
@@ -641,15 +696,15 @@ async function boot() {
 const DOC_REF = () => fbDb.collection('taskflow').doc(currentUser.uid);
 async function readCloud() {
   if (!currentUser) return null;
-  const snap = await DOC_REF().get();
+  const snap = await withTimeout(DOC_REF().get(), 15000, 'cloud read timed out');
   return snap.exists ? snap.data() : null;
 }
 async function writeCloud(payload) {
   if (!currentUser) return;
-  await DOC_REF().set(payload);
+  await withTimeout(DOC_REF().set(payload), 15000, 'cloud write timed out');
 }
 
-// ─── Merge ────────────────────────────────────────────────────
+// ─── Merge (sirf tab jab dono taraf badlav hua ho) ────────────
 function mergeData(local, cloud) {
   if (!cloud) return local;
   if (!local) return cloud;
@@ -660,16 +715,11 @@ function mergeData(local, cloud) {
     _ts:            Math.max(local._ts || 0, cloud._ts || 0)
   };
 }
+// Same id mile to is device wali (local) copy jeetegi
 function mergeArrays(a, b, idKey) {
   const map = new Map();
-  [...a, ...b].forEach(item => {
-    if (!item || item[idKey] == null) return;
-    const existing = map.get(item[idKey]);
-    if (!existing) { map.set(item[idKey], item); return; }
-    const aT = item.completed || item.date || 0;
-    const bT = existing.completed || existing.date || 0;
-    if (new Date(aT) >= new Date(bT)) map.set(item[idKey], item);
-  });
+  b.forEach(item => { if (item && item[idKey] != null) map.set(item[idKey], item); });
+  a.forEach(item => { if (item && item[idKey] != null) map.set(item[idKey], item); });
   return Array.from(map.values());
 }
 function mergeModules(a, b) {
@@ -681,80 +731,99 @@ function mergeModules(a, b) {
 }
 
 // ─── Sync core ────────────────────────────────────────────────
+function adoptCloud(cloud) {
+  tasks = cloud.tasks || [];
+  modules = (cloud.modules && cloud.modules.length) ? cloud.modules : modules;
+  deadlineEvents = cloud.deadlineEvents || [];
+  if (dedupeIds(tasks)) { localDirty = true; localVersion++; }
+}
 async function pushToCloud() {
-  if (!currentUser || !isOnline) return;
-  const payload = { tasks, modules, deadlineEvents, _ts: Date.now() };
+  if (!currentUser || !isOnline || !initialPullDone) return false;
+  const v = localVersion;
+  // JSON round-trip: Firestore 'undefined' values accept nahi karta
+  const payload = JSON.parse(JSON.stringify({ tasks, modules, deadlineEvents, _ts: Date.now() }));
   await writeCloud(payload);
   lastCloudTs = payload._ts;
-  localDirty = false;
+  if (localVersion === v) localDirty = false;   // push ke dauran naya badlav aaya to dirty rehne do
+  saveLocalCache();
+  return true;
 }
 async function pullFromCloud() {
-  if (!currentUser || !isOnline || localDirty) return false;
+  if (!currentUser || !isOnline || localDirty || !initialPullDone) return false;
   const cloud = await readCloud();
-  if (!cloud) return false;
+  if (!cloud || localDirty) return false;
   const cloudTs = cloud._ts || 0;
   if (cloudTs <= lastCloudTs) return false;
   lastCloudTs = cloudTs;
-  const local = { tasks, modules, deadlineEvents, _ts: cloudTs };
-  const merged = mergeData(local, cloud);
-  const currentJson = JSON.stringify({ t: tasks, m: modules, d: deadlineEvents });
-  const mergedJson  = JSON.stringify({ t: merged.tasks, m: merged.modules, d: merged.deadlineEvents });
-  if (mergedJson !== currentJson) {
-    tasks = merged.tasks;
-    modules = merged.modules;
-    deadlineEvents = merged.deadlineEvents;
-    renderAll();
-    return true;
-  }
-  return false;
+  adoptCloud(cloud);
+  renderAll();
+  saveLocalCache();
+  return true;
 }
-async function fullSync() {
-  let initialPullDone = false;
 async function fullSync() {
   if (!currentUser || !isOnline || syncing) return;
   syncing = true;
   setSyncStatus('syncing', 'Syncing…');
+  let ok = false;
   try {
     if (!initialPullDone) {
       const cloud = await readCloud();
       if (cloud) {
-        const merged = mergeData({ tasks, modules, deadlineEvents, _ts: 0 }, cloud);
-        tasks = merged.tasks;
-        modules = merged.modules;
-        deadlineEvents = merged.deadlineEvents;
-        lastCloudTs = cloud._ts || 0;
+        const cloudTs = cloud._ts || 0;
+        if (!localDirty) {
+          adoptCloud(cloud);                       // is device par koi pending badlav nahi: cloud hi sahi hai
+          lastCloudTs = cloudTs;
+        } else if (cloudTs > lastCloudTs) {
+          const merged = mergeData({ tasks, modules, deadlineEvents, _ts: 0 }, cloud);   // dono taraf badlav
+          tasks = merged.tasks; modules = merged.modules; deadlineEvents = merged.deadlineEvents;
+          dedupeIds(tasks);
+          lastCloudTs = cloudTs;
+          localVersion++;
+        }
+        // else: cloud wahi hai jo humne pichli baar dekha tha, local badlav bas push hoga
       }
       initialPullDone = true;
-      const maxId = tasks.reduce((mx, t) => Math.max(mx, t.id || 0), 0);
-      nextId = Math.max(nextId, maxId + 1);
       renderAll();
     }
-    await pushToCloud();
-    await pullFromCloud();
-    const maxId2 = tasks.reduce((mx, t) => Math.max(mx, t.id || 0), 0);
-    nextId = Math.max(nextId, maxId2 + 1);
+    if (localDirty) await pushToCloud();
+    else await pullFromCloud();
+    saveLocalCache();
     setSyncStatus('online', 'Synced');
+    ok = true;
   } catch (e) {
     console.error('[TaskFlow] Sync error:', e);
-    setSyncStatus('offline', 'Sync error');
+    setSyncStatus('offline', 'Not saved to cloud');
+    if (Date.now() - lastErrToast > 60000) {
+      lastErrToast = Date.now();
+      toast('⚠ Cloud save nahi hua. Data is device par safe hai. Ad blocker band karke / internet check karke dekhiye.', true);
+    }
   } finally {
     syncing = false;
   }
-}
+  // sync ke dauran koi naya badlav aaya to uska push abhi karo
+  if (ok && localDirty) { clearTimeout(pushTimer); pushTimer = setTimeout(fullSync, 300); }
 }
 function schedulePush() {
-  if (!currentUser || !isOnline) return;
   localDirty = true;
+  localVersion++;
+  saveLocalCache();                       // pehle is device par turant save
+  if (!currentUser) return;
+  if (!isOnline) { setSyncStatus('offline', 'Offline — saved on this device'); return; }
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => fullSync(), 1200);
+  pushTimer = setTimeout(() => fullSync(), 500);
 }
 function forceSyncNow() {
   if (!isOnline) { setSyncStatus('offline', 'Offline'); return; }
   if (!currentUser) { setSyncStatus('offline', 'Not signed in'); return; }
+  lastErrToast = 0;
   fullSync();
 }
 window.addEventListener('online', () => { isOnline = true; setSyncStatus('online', 'Back online'); if (currentUser) fullSync(); });
-window.addEventListener('offline', () => { isOnline = false; setSyncStatus('offline', 'Offline — local only'); });
+window.addEventListener('offline', () => { isOnline = false; setSyncStatus('offline', 'Offline — saved on this device'); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { saveLocalCache(); if (localDirty && currentUser && isOnline) fullSync(); }
+});
+window.addEventListener('pagehide', () => { saveLocalCache(); });
 
 // ─── Helpers ──────────────────────────────────────────────────
 function ts() { return new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
@@ -816,7 +885,7 @@ function addTask() {
   const dlRaw = document.getElementById('deadline-input').value;
   const repeatVal = document.getElementById('repeat-select').value;
   if (repeatVal && !dlRaw) { toast('⚠ Set a deadline to use repeat', true); return; }
-  const t = { id: nextId++, module: mod, task: text, priority: pri, status: 'Pending', created: ts(), completed: '', deadline: dlRaw ? new Date(dlRaw).toISOString() : '', repeat: dlRaw ? repeatVal : '' };
+  const t = { id: newId(), module: mod, task: text, priority: pri, status: 'Pending', created: ts(), completed: '', deadline: dlRaw ? new Date(dlRaw).toISOString() : '', repeat: dlRaw ? repeatVal : '' };
   tasks.unshift(t);
   input.value = '';
   document.getElementById('deadline-input').value = '';
@@ -871,7 +940,7 @@ function spawnRepeatTask(t) {
   if (!rep || !t.deadline) return;
   const nd = nextRepeatDeadline(t.deadline, rep);
   if (!nd) return;
-  tasks.unshift({ id: nextId++, module: t.module, task: t.task, priority: t.priority, status: 'Pending', created: ts(), completed: '', deadline: nd, repeat: rep });
+  tasks.unshift({ id: newId(), module: t.module, task: t.task, priority: t.priority, status: 'Pending', created: ts(), completed: '', deadline: nd, repeat: rep });
 }
 function repeatSelectHtml(t) {
   const cur = normRepeat(t.repeat);
@@ -1407,7 +1476,7 @@ function importExcel(event) {
             completedVal = /^\d{4}-\d{2}-\d{2}T/.test(s) ? s : (parseAnyDate(s) || s);
           }
         }
-        tasks.unshift({ id: nextId++, module: moduleName, task: taskText, priority: String(r['Priority'] || r['priority'] || 'Medium').trim(), status: String(r['Status'] || r['status'] || 'Pending').trim(), deadline: parseAnyDate(r['Deadline'] || r['deadline']), repeat: parseAnyDate(r['Deadline'] || r['deadline']) ? normRepeat(r['Repeat'] || r['repeat']) : '', created: parseDisplayDate(r['Created'] || r['created']) || ts(), completed: completedVal });
+        tasks.unshift({ id: newId(), module: moduleName, task: taskText, priority: String(r['Priority'] || r['priority'] || 'Medium').trim(), status: String(r['Status'] || r['status'] || 'Pending').trim(), deadline: parseAnyDate(r['Deadline'] || r['deadline']), repeat: parseAnyDate(r['Deadline'] || r['deadline']) ? normRepeat(r['Repeat'] || r['repeat']) : '', created: parseDisplayDate(r['Created'] || r['created']) || ts(), completed: completedVal });
         imported++;
       });
       renderAll(); schedulePush();
