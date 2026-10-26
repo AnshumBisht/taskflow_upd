@@ -626,6 +626,23 @@ function dedupeIds(list) {
   return changed;
 }
 
+// Purane bug mein naye task ko purani id mil gayi thi, aur ledger mein us id ka event pehle se tha,
+// isliye naye task ka hit/miss kabhi record nahi hota tha. Aise pending tasks ko nayi id de do.
+function fixLedgerCollisions() {
+  let changed = false;
+  tasks.forEach(t => {
+    if (!t || t.status === 'Done') return;
+    const ev = deadlineEvents.find(e => e.taskId === t.id);
+    if (ev && ev.taskName && ev.taskName !== t.task) { t.id = newId(); changed = true; }
+  });
+  return changed;
+}
+function repairData() {
+  const a = dedupeIds(tasks);
+  const b = fixLedgerCollisions();
+  return a || b;
+}
+
 // ─── Local copy (is device par backup) ────────────────────────
 function saveLocalCache() {
   try {
@@ -647,7 +664,7 @@ function loadLocalCache() {
     deadlineEvents = c.deadlineEvents || [];
     localDirty = !!c.dirty;
     lastCloudTs = c.baseTs || 0;
-    if (dedupeIds(tasks)) { localDirty = true; localVersion++; }
+    if (repairData()) { localDirty = true; localVersion++; }
   } catch (e) { console.warn('[TaskFlow] Local cache load failed:', e); }
 }
 
@@ -735,7 +752,7 @@ function adoptCloud(cloud) {
   tasks = cloud.tasks || [];
   modules = (cloud.modules && cloud.modules.length) ? cloud.modules : modules;
   deadlineEvents = cloud.deadlineEvents || [];
-  if (dedupeIds(tasks)) { localDirty = true; localVersion++; }
+  if (repairData()) { localDirty = true; localVersion++; }
 }
 async function pushToCloud() {
   if (!currentUser || !isOnline || !initialPullDone) return false;
@@ -776,7 +793,7 @@ async function fullSync() {
         } else if (cloudTs > lastCloudTs) {
           const merged = mergeData({ tasks, modules, deadlineEvents, _ts: 0 }, cloud);   // dono taraf badlav
           tasks = merged.tasks; modules = merged.modules; deadlineEvents = merged.deadlineEvents;
-          dedupeIds(tasks);
+          repairData();
           lastCloudTs = cloudTs;
           localVersion++;
         }
@@ -1018,7 +1035,7 @@ function checkOverdueEvents() {
       changed = true;
     }
   });
-  if (changed) schedulePush();
+  if (changed) { schedulePush(); renderCharts(true); }   // deadline nikalte hi graph update ho
 }
 
 // ─── Timers ───────────────────────────────────────────────────
