@@ -225,8 +225,11 @@ input:focus,select:focus{border-color:var(--accent)}
 .dl-card-timer .timer-lbl{font-size:9px}
 .dl-card-timer .overdue-badge{width:100%;justify-content:center;font-size:12px;padding:6px 10px}
 .sticky-section{margin-bottom:24px}
+.sticky-row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.sticky-col{flex:1 1 300px;min-width:0}
 .sticky-wall{display:flex;justify-content:flex-start;padding:6px 4px 10px}
 .sticky-note{width:100%;max-width:340px;min-height:130px;padding:26px 18px 18px;background:#f4e27a;color:#2b2616;font-family:'Outfit',sans-serif;font-size:15px;font-weight:500;line-height:1.35;border-radius:2px 2px 16px 2px;box-shadow:0 6px 14px rgba(0,0,0,.55),inset 0 -18px 24px -18px rgba(0,0,0,.18);position:relative;transform:rotate(-1deg);text-align:left}
+.sticky-note.tomorrow{background:#a9dcc9;transform:rotate(1deg)}
 .sticky-note::before{content:'';position:absolute;top:8px;left:50%;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:rgba(0,0,0,.22)}
 .sticky-item{display:block;padding:7px 0;border-bottom:1px dashed rgba(43,38,22,.22);cursor:pointer;word-break:break-word}
 .sticky-item:last-child{border-bottom:none}
@@ -358,8 +361,16 @@ input:focus,select:focus{border-color:var(--accent)}
   </div>
 
   <div class="sticky-section">
-    <div class="deadline-board-header"><div class="deadline-board-title">📌 Due Today <span class="deadline-board-count" id="sticky-count">0</span></div></div>
-    <div class="sticky-wall" id="sticky-wall"></div>
+    <div class="sticky-row">
+      <div class="sticky-col">
+        <div class="deadline-board-header"><div class="deadline-board-title">📌 Due Today <span class="deadline-board-count" id="sticky-count">0</span></div></div>
+        <div class="sticky-wall" id="sticky-wall"></div>
+      </div>
+      <div class="sticky-col">
+        <div class="deadline-board-header"><div class="deadline-board-title">🗓 Due Tomorrow <span class="deadline-board-count" id="sticky-count-tmrw">0</span></div></div>
+        <div class="sticky-wall" id="sticky-wall-tmrw"></div>
+      </div>
+    </div>
   </div>
 
   <div class="charts-section">
@@ -1219,18 +1230,24 @@ function dayKey(d) {
   const da = String(d.getDate()).padStart(2, '0');
   return y + '-' + mo + '-' + da;
 }
-function renderStickyNotes() {
-  const wall = document.getElementById('sticky-wall');
-  const countEl = document.getElementById('sticky-count');
+function fillSticky(wallId, countId, key, emptyMsg, extraClass) {
+  const wall = document.getElementById(wallId);
+  const countEl = document.getElementById(countId);
   if (!wall) return;
-  const todayKey = dayKey(new Date());
-  const todays = tasks.filter(t => t.deadline && t.deadline !== '' && !isNaN(new Date(t.deadline)) && dayKey(new Date(t.deadline)) === todayKey).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
-  countEl.textContent = todays.filter(t => t.status !== 'Done').length;
-  const body = todays.length ? todays.map(t => {
+  const list = tasks.filter(t => t.deadline && t.deadline !== '' && !isNaN(new Date(t.deadline)) && dayKey(new Date(t.deadline)) === key).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  countEl.textContent = list.filter(t => t.status !== 'Done').length;
+  const body = list.length ? list.map(t => {
     const done = t.status === 'Done';
     return '<div class="sticky-item '+(done ? 'done' : '')+'" '+(done ? '' : 'onclick="completeTask('+t.id+')" title="Click to mark done"')+'><span class="sticky-text">'+esc(t.task)+'</span></div>';
-  }).join('') : '<div class="sticky-empty">Nothing due today 🎉</div>';
-  wall.innerHTML = '<div class="sticky-note">'+body+'</div>';
+  }).join('') : '<div class="sticky-empty">'+emptyMsg+'</div>';
+  wall.innerHTML = '<div class="sticky-note '+extraClass+'">'+body+'</div>';
+}
+function renderStickyNotes() {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  fillSticky('sticky-wall', 'sticky-count', dayKey(today), 'Nothing due today 🎉', '');
+  fillSticky('sticky-wall-tmrw', 'sticky-count-tmrw', dayKey(tomorrow), 'Nothing due tomorrow 😌', 'tomorrow');
 }
 function renderDeadlineBoard() {
   const scroll = document.getElementById('deadline-scroll');
