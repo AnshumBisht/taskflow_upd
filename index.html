@@ -224,6 +224,21 @@ input:focus,select:focus{border-color:var(--accent)}
 .dl-card-timer .timer-sep{font-size:16px;margin-top:0}
 .dl-card-timer .timer-lbl{font-size:9px}
 .dl-card-timer .overdue-badge{width:100%;justify-content:center;font-size:12px;padding:6px 10px}
+.modlist-section{margin-top:22px}
+.dm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.dm-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.dm-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px}
+.dm-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.dm-count{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted2)}
+.dm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border)}
+.dm-task{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dm-pill{flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px 10px;border-radius:100px;background:var(--s2);color:var(--muted2);border:1px solid var(--border)}
+.dm-pill.over{background:rgba(224,82,82,.15);color:var(--red);border-color:rgba(224,82,82,.4)}
+.dm-pill.today{background:rgba(224,169,82,.15);color:#e0a952;border-color:rgba(224,169,82,.4)}
+.dm-pill.soon{background:rgba(90,171,122,.15);color:#5aab7a;border-color:rgba(90,171,122,.4)}
+.dm-more{width:100%;margin-top:6px;background:transparent;border:1px dashed var(--border2);color:var(--muted2);border-radius:8px;padding:6px;font-size:12px;font-family:'Outfit',sans-serif;cursor:pointer;transition:all .2s}
+.dm-more:hover{color:var(--text);border-color:var(--accent-l)}
+.dm-empty{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 0}
 .sticky-section{margin-bottom:24px}
 .sticky-row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
 .sticky-col{flex:1 1 300px;min-width:0}
@@ -251,55 +266,11 @@ input:focus,select:focus{border-color:var(--accent)}
 .perf-score.negative{color:var(--red)}
 .perf-score.zero{color:var(--muted2)}
 .chart-wrap-tall{position:relative;height:180px}
-.focus-card{margin-top:14px}
-.focus-body{display:flex;align-items:center;gap:32px;flex-wrap:wrap;padding-top:4px}
-.focus-ring-wrap{position:relative;width:140px;height:140px;flex-shrink:0}
-.focus-ring{width:140px;height:140px;transform:rotate(-90deg)}
-.focus-ring-track{fill:none;stroke:var(--s3);stroke-width:9}
-.focus-ring-progress{fill:none;stroke:#5aab7a;stroke-width:9;stroke-linecap:round;stroke-dasharray:389.6;stroke-dashoffset:0;transition:stroke-dashoffset .3s linear,stroke .3s}
-.focus-ring-progress.on-break{stroke:#e0a952}
-.focus-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.focus-time{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;letter-spacing:-.5px}
-.focus-mode-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted2);margin-top:2px}
-.focus-controls{flex:1;min-width:240px;display:flex;flex-direction:column;gap:12px}
-.focus-presets{display:flex;gap:8px;flex-wrap:wrap}
-.focus-preset{background:var(--s2);border:1px solid var(--border);color:var(--muted2);font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer;transition:all .15s}
-.focus-preset:hover{border-color:var(--border2);color:var(--text)}
-.focus-preset.active{background:var(--s3);border-color:#5aab7a;color:#5aab7a}
-.focus-hint{font-size:12px;color:var(--muted2);line-height:1.4}
-.focus-buttons{display:flex;gap:8px;flex-wrap:wrap}
-.focus-btn{background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;font-weight:500;padding:9px 16px;border-radius:8px;cursor:pointer;transition:all .15s}
-.focus-btn:hover{border-color:var(--border2);background:var(--s3)}
-.focus-btn-primary{background:#5aab7a;border-color:#5aab7a;color:#06120a;font-weight:600}
-.focus-btn-primary:hover{background:#6cbd8c;border-color:#6cbd8c}
-.focus-btn-primary.is-running{background:var(--red);border-color:var(--red);color:#1a0606}
-.focus-btn-primary.is-running:hover{background:#e86a6a;border-color:#e86a6a}
-@media (max-width:640px){.focus-body{flex-direction:column;align-items:stretch}.focus-ring-wrap{align-self:center}}
 .sync-status{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);padding:0 8px;margin-top:4px;display:flex;align-items:center;gap:6px}
 .sync-status .dot{width:6px;height:6px;border-radius:50%;background:var(--muted);transition:background .3s}
 .sync-status.online .dot{background:#5aab7a}
 .sync-status.syncing .dot{background:#e0a952;animation:pulse 1s infinite}
 .sync-status.offline .dot{background:var(--red)}
-.modlist-section{margin-top:14px}
-.ml-block{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px}
-.ml-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
-.ml-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
-.ml-nav{display:flex;align-items:center;gap:8px}
-.ml-pageinfo{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted2)}
-.ml-btn{background:var(--s2);border:1px solid var(--border2);color:var(--text);border-radius:8px;width:30px;height:28px;cursor:pointer;font-size:14px;line-height:1;transition:all .2s}
-.ml-btn:hover:not(:disabled){border-color:var(--accent-l);background:var(--s3)}
-.ml-btn:disabled{opacity:.3;cursor:default}
-.ml-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
-.ml-item{background:var(--s2);border:1px solid var(--border);border-top:2px solid var(--ml-color,var(--border2));border-radius:10px;padding:10px 12px;min-width:0}
-.ml-task{font-size:12.5px;line-height:1.4;margin-bottom:8px;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.ml-item.done .ml-task{text-decoration:line-through;color:var(--muted)}
-.ml-item.over{border-color:rgba(224,82,82,.35);border-top-color:var(--red)}
-.ml-item.over .ml-task{color:var(--red)}
-.ml-when{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2);line-height:1.6}
-.ml-item.over .ml-when{color:var(--red)}
-.ml-empty{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px}
-@media (max-width:1200px){.ml-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:640px){.ml-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -421,41 +392,6 @@ input:focus,select:focus{border-color:var(--accent)}
         <div class="deadline-board-title">🗂 Deadlines by Module <span class="deadline-board-count" id="modlist-count">0</span></div>
       </div>
       <div id="modlist-grid"></div>
-    </div>
-
-    <div class="chart-card-full focus-card" style="margin-top:14px">
-      <div class="chart-card-full-header">
-        <div><div class="chart-card-full-title">🎯 Focus Timer</div>
-          <div class="chart-card-full-sub" id="focus-sub">Short work bursts with built-in breaks</div></div>
-        <div><div style="font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:right">Sessions today</div>
-          <div class="perf-score zero" id="focus-session-count">0</div></div>
-      </div>
-      <div class="focus-body">
-        <div class="focus-ring-wrap">
-          <svg class="focus-ring" viewBox="0 0 140 140">
-            <circle class="focus-ring-track" cx="70" cy="70" r="62"></circle>
-            <circle class="focus-ring-progress" id="focus-ring-progress" cx="70" cy="70" r="62"></circle>
-          </svg>
-          <div class="focus-ring-center">
-            <div class="focus-time" id="focus-time">25:00</div>
-            <div class="focus-mode-label" id="focus-mode-label">Focus</div>
-          </div>
-        </div>
-        <div class="focus-controls">
-          <div class="focus-presets" id="focus-presets">
-            <button class="focus-preset active" data-work="25" data-break="5">25 / 5</button>
-            <button class="focus-preset" data-work="15" data-break="5">15 / 5</button>
-            <button class="focus-preset" data-work="50" data-break="10">50 / 10</button>
-            <button class="focus-preset" data-work="10" data-break="2">10 / 2</button>
-          </div>
-          <div class="focus-hint">Pick whatever feels doable right now — a short block still counts.</div>
-          <div class="focus-buttons">
-            <button class="focus-btn focus-btn-primary" id="focus-start-btn" onclick="focusTimerToggle()">Start</button>
-            <button class="focus-btn" onclick="focusTimerReset()">Reset</button>
-            <button class="focus-btn" onclick="focusTimerSkip()">Skip to break</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -1093,57 +1029,50 @@ function renderAll() {
   renderStickyNotes(); renderModuleDeadlines(); renderTaskList(); updateHeader(); renderCharts();
   startTimers();
 }
-const ML_PER_PAGE = 6;
-const mlPages = {};
-function mlNav(i, d) {
+const DM_SHOW = 5;
+const dmExpanded = {};
+function dmToggle(i) {
   const m = modules[i];
   if (!m) return;
-  mlPages[m.name] = (mlPages[m.name] || 0) + d;
+  dmExpanded[m.name] = !dmExpanded[m.name];
   renderModuleDeadlines();
+}
+function dueInfo(iso) {
+  const dl = new Date(iso), now = new Date();
+  const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((dayStart(dl) - dayStart(now)) / 86400000);
+  const time = dl.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  if (dl < now) return { cls: 'over', text: days < 0 ? 'Overdue ' + (-days) + 'd' : 'Overdue' };
+  if (days === 0) return { cls: 'today', text: 'Today · ' + time };
+  if (days === 1) return { cls: 'soon', text: 'Tomorrow · ' + time };
+  if (days < 7) return { cls: '', text: 'In ' + days + ' days' };
+  return { cls: '', text: dl.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) };
 }
 function renderModuleDeadlines() {
   const grid = document.getElementById('modlist-grid');
   const countEl = document.getElementById('modlist-count');
   if (!grid) return;
-  const now = Date.now();
   let pendingTotal = 0;
-  const html = modules.map((m, idx) => {
+  const cards = modules.map((m, idx) => {
     if (activeModule !== '__all__' && m.name !== activeModule) return '';
     const list = tasks
-      .filter(t => t.module === m.name && t.deadline && !isNaN(new Date(t.deadline)))
-      .sort((a, b) => {
-        const ad = a.status === 'Done', bd = b.status === 'Done';
-        if (ad !== bd) return ad ? 1 : -1;
-        return new Date(a.deadline) - new Date(b.deadline);
-      });
+      .filter(t => t.module === m.name && t.status !== 'Done' && t.deadline && !isNaN(new Date(t.deadline)))
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
     if (!list.length) return '';
-    const pending = list.filter(t => t.status !== 'Done').length;
-    pendingTotal += pending;
-    const pages = Math.ceil(list.length / ML_PER_PAGE);
-    const page = Math.min(Math.max(mlPages[m.name] || 0, 0), pages - 1);
-    mlPages[m.name] = page;
-    const items = list.slice(page * ML_PER_PAGE, (page + 1) * ML_PER_PAGE).map(t => {
-      const dl = new Date(t.deadline);
-      const done = t.status === 'Done';
-      const over = !done && dl.getTime() < now;
-      const date = dl.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-      const time = dl.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-      return '<div class="ml-item ' + (done ? 'done' : '') + ' ' + (over ? 'over' : '') + '">' +
-        '<div class="ml-task">' + (done ? '✓ ' : '') + esc(t.task) + '</div>' +
-        '<div class="ml-when">📅 ' + date + '<br>⏰ ' + time + (over ? '<br>⚠ OVERDUE' : '') + '</div></div>';
+    pendingTotal += list.length;
+    const open = !!dmExpanded[m.name];
+    const shown = open ? list : list.slice(0, DM_SHOW);
+    const rows = shown.map(t => {
+      const info = dueInfo(t.deadline);
+      return '<div class="dm-row"><span class="dm-task" title="' + esc(t.task) + '">' + esc(t.task) + '</span><span class="dm-pill ' + info.cls + '">' + info.text + '</span></div>';
     }).join('');
-    const nav = pages > 1
-      ? '<div class="ml-nav"><button class="ml-btn" onclick="mlNav(' + idx + ',-1)" ' + (page === 0 ? 'disabled' : '') + ' title="Previous 6">‹</button>' +
-        '<span class="ml-pageinfo">' + (page + 1) + ' / ' + pages + '</span>' +
-        '<button class="ml-btn" onclick="mlNav(' + idx + ',1)" ' + (page >= pages - 1 ? 'disabled' : '') + ' title="Next 6">›</button></div>'
+    const more = list.length > DM_SHOW
+      ? '<button class="dm-more" onclick="dmToggle(' + idx + ')">' + (open ? 'Show less' : 'Show ' + (list.length - DM_SHOW) + ' more') + '</button>'
       : '';
-    return '<div class="ml-block" style="--ml-color:' + m.color + '">' +
-      '<div class="ml-head"><div class="ml-title"><span>' + m.icon + '</span><span>' + esc(m.name) + '</span>' +
-      '<span class="deadline-board-count">' + pending + ' pending</span></div>' + nav + '</div>' +
-      '<div class="ml-strip">' + items + '</div></div>';
+    return '<div class="dm-card"><div class="dm-head"><div class="dm-name"><span>' + m.icon + '</span><span>' + esc(m.name) + '</span></div><span class="dm-count">' + list.length + ' pending</span></div>' + rows + more + '</div>';
   }).join('');
   countEl.textContent = pendingTotal;
-  grid.innerHTML = html || '<div class="ml-empty">No tasks with deadlines yet ⏰</div>';
+  grid.innerHTML = cards ? '<div class="dm-grid">' + cards + '</div>' : '<div class="dm-empty">No pending deadlines 🎉</div>';
 }
 setInterval(renderModuleDeadlines, 60000);
 function renderSidebar() {
@@ -1557,104 +1486,6 @@ function playCompleteSound() {
   } catch (e) {}
 }
 
-// ─── Focus Timer ──────────────────────────────────────────────
-const FOCUS_RING_CIRCUMFERENCE = 2 * Math.PI * 62;
-let focusWorkMins = 25, focusBreakMins = 5, focusMode = 'work', focusSecondsLeft = 25 * 60, focusRunning = false, focusInterval = null;
-function focusTodayKey() { return 'taskflow_focus_' + new Date().toISOString().slice(0, 10); }
-function focusLoadSessionCount() { return parseInt(localStorage.getItem(focusTodayKey()) || '0', 10); }
-function focusBumpSessionCount() {
-  const n = focusLoadSessionCount() + 1;
-  localStorage.setItem(focusTodayKey(), String(n));
-  const el = document.getElementById('focus-session-count');
-  if (el) { el.textContent = n; el.className = 'perf-score positive'; }
-}
-function initFocusTimer() {
-  const countEl = document.getElementById('focus-session-count');
-  if (countEl) countEl.textContent = focusLoadSessionCount();
-  document.querySelectorAll('.focus-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (focusRunning) return;
-      document.querySelectorAll('.focus-preset').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      focusWorkMins = parseInt(btn.dataset.work, 10);
-      focusBreakMins = parseInt(btn.dataset.break, 10);
-      focusMode = 'work';
-      focusSecondsLeft = focusWorkMins * 60;
-      focusRenderTimer();
-    });
-  });
-  focusRenderTimer();
-}
-function focusFormatTime(s) { const m = Math.floor(s / 60); const ss = s % 60; return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0'); }
-function focusRenderTimer() {
-  const timeEl = document.getElementById('focus-time');
-  const modeEl = document.getElementById('focus-mode-label');
-  const ringEl = document.getElementById('focus-ring-progress');
-  const subEl = document.getElementById('focus-sub');
-  if (!timeEl || !ringEl) return;
-  timeEl.textContent = focusFormatTime(focusSecondsLeft);
-  modeEl.textContent = focusMode === 'work' ? 'Focus' : 'Break';
-  ringEl.classList.toggle('on-break', focusMode === 'break');
-  const totalSeconds = (focusMode === 'work' ? focusWorkMins : focusBreakMins) * 60;
-  const fraction = totalSeconds > 0 ? focusSecondsLeft / totalSeconds : 0;
-  ringEl.style.strokeDasharray = FOCUS_RING_CIRCUMFERENCE;
-  ringEl.style.strokeDashoffset = FOCUS_RING_CIRCUMFERENCE * (1 - fraction);
-  if (subEl) subEl.textContent = focusMode === 'work' ? 'Just this one block — the rest can wait.' : 'Step away for a bit. Stretch, water, stare out a window.';
-}
-function focusTimerToggle() { focusRunning ? focusTimerPause() : focusTimerStart(); }
-function focusTimerStart() {
-  if (focusRunning) return;
-  focusRunning = true;
-  const btn = document.getElementById('focus-start-btn');
-  if (btn) { btn.textContent = 'Pause'; btn.classList.add('is-running'); }
-  focusInterval = setInterval(() => {
-    focusSecondsLeft--;
-    if (focusSecondsLeft <= 0) { focusTimerAdvancePhase(); return; }
-    focusRenderTimer();
-  }, 1000);
-}
-function focusTimerPause() {
-  focusRunning = false;
-  clearInterval(focusInterval); focusInterval = null;
-  const btn = document.getElementById('focus-start-btn');
-  if (btn) { btn.textContent = 'Resume'; btn.classList.remove('is-running'); }
-}
-function focusTimerReset() {
-  focusTimerPause();
-  focusMode = 'work';
-  focusSecondsLeft = focusWorkMins * 60;
-  const btn = document.getElementById('focus-start-btn');
-  if (btn) { btn.textContent = 'Start'; btn.classList.remove('is-running'); }
-  focusRenderTimer();
-}
-function focusTimerSkip() {
-  if (focusMode === 'work') { focusTimerAdvancePhase(); }
-  else {
-    focusTimerPause();
-    focusMode = 'work';
-    focusSecondsLeft = focusWorkMins * 60;
-    const btn = document.getElementById('focus-start-btn');
-    if (btn) { btn.textContent = 'Start'; btn.classList.remove('is-running'); }
-    focusRenderTimer();
-  }
-}
-function focusTimerAdvancePhase() {
-  focusTimerPause();
-  if (focusMode === 'work') {
-    focusBumpSessionCount();
-    focusMode = 'break';
-    focusSecondsLeft = focusBreakMins * 60;
-    toast('🎯 Nice work — break time.');
-  } else {
-    focusMode = 'work';
-    focusSecondsLeft = focusWorkMins * 60;
-    toast('Break\u2019s over — ready when you are.');
-  }
-  const btn = document.getElementById('focus-start-btn');
-  if (btn) { btn.textContent = 'Start'; btn.classList.remove('is-running'); }
-  focusRenderTimer();
-}
-
 // ─── Boot on load ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
@@ -1662,7 +1493,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
   document.getElementById('mod-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') addModule(); });
   document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
-  initFocusTimer();
   boot();
 });
 </script>
