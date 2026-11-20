@@ -253,6 +253,9 @@ input:focus,select:focus{border-color:var(--accent)}
 .sticky-item.done{cursor:default}
 .sticky-item.done .sticky-text{text-decoration-color:#2b2616;opacity:.55}
 .sticky-empty{color:rgba(43,38,22,.6);font-size:14px}
+.due-pct{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;line-height:1;margin-bottom:10px;color:var(--text);transition:color .3s}
+.due-pct small{font-size:11px;font-weight:400;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-left:8px}
+.due-pct.full{color:#5aab7a}
 .chart-card-full{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:20px 20px 16px;margin-top:14px;position:relative;transition:border-color .2s}
 .chart-card-full:hover{border-color:var(--border2)}
 .chart-card-full-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
@@ -334,6 +337,7 @@ input:focus,select:focus{border-color:var(--accent)}
   <div class="sticky-section">
     <div class="sticky-row">
       <div class="sticky-col">
+        <div class="due-pct" id="due-today-pct">0%<small>nothing due</small></div>
         <div class="deadline-board-header"><div class="deadline-board-title">📌 Due Today <span class="deadline-board-count" id="sticky-count">0</span></div></div>
         <div class="sticky-wall" id="sticky-wall"></div>
       </div>
@@ -1177,7 +1181,19 @@ function renderStickyNotes() {
   tomorrow.setDate(today.getDate() + 1);
   fillSticky('sticky-wall', 'sticky-count', dayKey(today), 'Nothing due today 🎉', '');
   fillSticky('sticky-wall-tmrw', 'sticky-count-tmrw', dayKey(tomorrow), 'Nothing due tomorrow 😌', 'tomorrow');
+
+  // % of today's deadline tasks completed (resets daily, same day filter as the Due Today note)
+  const key = dayKey(today);
+  const todays = tasks.filter(t => t.deadline && t.deadline !== '' && !isNaN(new Date(t.deadline)) && dayKey(new Date(t.deadline)) === key);
+  const doneCount = todays.filter(t => t.status === 'Done').length;
+  const pct = todays.length ? Math.round(doneCount / todays.length * 100) : 0;
+  const pctEl = document.getElementById('due-today-pct');
+  if (pctEl) {
+    pctEl.innerHTML = pct + '%<small>' + (todays.length ? doneCount + '/' + todays.length + ' done' : 'nothing due') + '</small>';
+    pctEl.classList.toggle('full', todays.length > 0 && pct === 100);
+  }
 }
+setInterval(renderStickyNotes, 60000); // rolls over to the next day's tasks at midnight
 function renderDeadlineBoard() {
   const scroll = document.getElementById('deadline-scroll');
   const countEl = document.getElementById('dl-board-count');
