@@ -342,6 +342,7 @@ input:focus,select:focus{border-color:var(--accent)}
         <div class="sticky-wall" id="sticky-wall"></div>
       </div>
       <div class="sticky-col">
+        <div class="due-pct" id="due-tmrw-pct">0%<small>nothing due</small></div>
         <div class="deadline-board-header"><div class="deadline-board-title">🗓 Due Tomorrow <span class="deadline-board-count" id="sticky-count-tmrw">0</span></div></div>
         <div class="sticky-wall" id="sticky-wall-tmrw"></div>
       </div>
@@ -1182,15 +1183,18 @@ function renderStickyNotes() {
   fillSticky('sticky-wall', 'sticky-count', dayKey(today), 'Nothing due today 🎉', '');
   fillSticky('sticky-wall-tmrw', 'sticky-count-tmrw', dayKey(tomorrow), 'Nothing due tomorrow 😌', 'tomorrow');
 
-  // % of today's deadline tasks completed (resets daily, same day filter as the Due Today note)
-  const key = dayKey(today);
-  const todays = tasks.filter(t => t.deadline && t.deadline !== '' && !isNaN(new Date(t.deadline)) && dayKey(new Date(t.deadline)) === key);
-  const doneCount = todays.filter(t => t.status === 'Done').length;
-  const pct = todays.length ? Math.round(doneCount / todays.length * 100) : 0;
-  const pctEl = document.getElementById('due-today-pct');
-  if (pctEl) {
-    pctEl.innerHTML = pct + '%<small>' + (todays.length ? doneCount + '/' + todays.length + ' done' : 'nothing due') + '</small>';
-    pctEl.classList.toggle('full', todays.length > 0 && pct === 100);
+  // % of deadline tasks completed for today and tomorrow (resets daily, same day filter as the sticky notes)
+  updateDuePct('due-today-pct', dayKey(today));
+  updateDuePct('due-tmrw-pct', dayKey(tomorrow));
+}
+function updateDuePct(elId, key) {
+  const list = tasks.filter(t => t.deadline && t.deadline !== '' && !isNaN(new Date(t.deadline)) && dayKey(new Date(t.deadline)) === key);
+  const doneCount = list.filter(t => t.status === 'Done').length;
+  const pct = list.length ? Math.round(doneCount / list.length * 100) : 0;
+  const el = document.getElementById(elId);
+  if (el) {
+    el.innerHTML = pct + '%<small>' + (list.length ? doneCount + '/' + list.length + ' done' : 'nothing due') + '</small>';
+    el.classList.toggle('full', list.length > 0 && pct === 100);
   }
 }
 setInterval(renderStickyNotes, 60000); // rolls over to the next day's tasks at midnight
